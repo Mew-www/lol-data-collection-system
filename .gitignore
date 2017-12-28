@@ -1,0 +1,15 @@
+# Compiled python
+__pycache__/
+*.py[cod]
+
+# Virtual env
+env/
+
+# Local SQLite db (just in case someone was to change DB engine to SQLite)
+db.sqlite3
+
+# .save files (from broken sessions)
+*.save
+
+# Development env
+.idea/
