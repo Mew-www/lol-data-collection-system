@@ -18,6 +18,9 @@ sudo -u postgres createdb --encoding=UTF8 --owner=dj_lol_dcs_user dj_lol_dcs_db
 -> save 'DJ_PG_PASSWORD' in environment variables (VARIES PER SYSTEM) django finds it there  
 -> save 'DJ_PG_DBNAME' in environment variables (VARIES PER SYSTEM) django finds it there  
 
+# Configuring RIOT API
+-> save 'RIOT_API_KEY' in environment variables (VARIES PER SYSTEM) both django and scripts find it there
+
 # Loading 3rd party modules to project
 cd lol-data-collection-system  
 virtualenv -p python3 env  
