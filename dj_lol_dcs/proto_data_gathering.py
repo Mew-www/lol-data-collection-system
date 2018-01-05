@@ -48,9 +48,11 @@ def main():
     losses = 0
     for match in matches:
         # Check rate-limit quota
-        more_ok, wait_seconds = check_rate_limits(app_rate_limits, request_history_timestamps)
-        if not more_ok:
+        ok, wait_seconds = check_rate_limits(app_rate_limits, request_history_timestamps)
+        while not ok:
             time.sleep(wait_seconds)
+            # Re-check in case if multiple quotas full simultaneously
+            ok, wait_seconds = check_rate_limits(app_rate_limits, request_history_timestamps)
 
         # (GET) Match
         request_history_timestamps.append(int(time.time()))
@@ -118,6 +120,7 @@ def check_rate_limits(limits, request_history):
         max_requests_in_timeframe, timeframe_size = limit
         timeframe_start = epoch_now - timeframe_size
         requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start, request_history))
+        print("[{}/{}, in {} second timeframe]".format(len(requests_done_in_timeframe), max_requests_in_timeframe, timeframe_size))
         if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
             return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
     return True, None
