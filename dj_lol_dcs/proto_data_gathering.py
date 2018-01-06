@@ -91,6 +91,32 @@ def main():
           .format(wins, round(wins/(wins+losses)*100), losses, round(losses/(wins+losses)*100)))
 
 
+class ApiKeyContainer:
+    """Container for API-key and respective app-rate-limit(s); Encapsulates and aggregates them together"""
+
+    def __init__(self, api_key, app_rate_limits):
+        self.__api_key = api_key
+        self.__app_rate_limits = app_rate_limits
+
+    def get_api_key(self):
+        return self.__api_key
+
+    def get_app_rate_limits(self):
+        return self.__app_rate_limits
+
+    def change_key(self, new_api_key, new_app_rate_limits):
+        self.__api_key = new_api_key
+        self.__app_rate_limits = new_app_rate_limits
+
+
+class RiotApi:
+
+    def __init__(self, api_key_container, regional_endpoints):
+        self.__api_key_container = api_key_container
+        self.__regional_endpoints = regional_endpoints
+        pass
+
+
 def request_riotapi(url, app_rate_limits, request_history_timestamps, pre_request_print=None):
 
     # Check rate-limit quotas, catches first full quota
@@ -157,6 +183,40 @@ def check_rate_limits(limits, request_history):
         if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
             return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
     return True, None
+
+
+class RegionalEndpoints:
+    """Region <=references=> Platform <=references=> Host; Platforms are multiple for NA1/NA"""
+    __hosts = {
+        "br1.api.riotgames.com":  {'platforms': ["BR1"],       'region': "BR"},
+        "eun1.api.riotgames.com": {'platforms': ["EUN1"],      'region': "EUNE"},
+        "euw1.api.riotgames.com": {'platforms': ["EUW1"],      'region': "EUW"},
+        "jp1.api.riotgames.com":  {'platforms': ["JP1"],       'region': "JP"},
+        "kr.api.riotgames.com":   {'platforms': ["KR"],        'region': "KR"},
+        "la1.api.riotgames.com":  {'platforms': ["LA1"],       'region': "LAN"},
+        "la2.api.riotgames.com":  {'platforms': ["LA2"],       'region': "LAS"},
+        "na1.api.riotgames.com":  {'platforms': ["NA1", "NA"], 'region': "NA"},
+        "oc1.api.riotgames.com":  {'platforms': ["OC1"],       'region': "OCE"},
+        "tr1.api.riotgames.com":  {'platforms': ["TR1"],       'region': "TR"},
+        "ru.api.riotgames.com":   {'platforms': ["RU"],        'region': "RU"},
+        "pbe1.api.riotgames.com": {'platforms': ["PBE1"],      'region': "PBE"}
+    }
+
+    def get_host_by_platform(self, platform):
+        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
+        try:
+            matching_host = next(host for host, ref in self.__hosts.items() if (platform in ref['platforms']))
+            return matching_host
+        except StopIteration:
+            return None
+
+    def get_host_by_region(self, region):
+        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
+        try:
+            matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region)
+            return matching_host
+        except StopIteration:
+            return None
 
 
 # API-response HTTP exceptions
