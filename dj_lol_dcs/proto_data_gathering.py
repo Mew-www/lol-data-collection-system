@@ -13,6 +13,8 @@ import django
 os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
 django.setup()
 from lolapi.models import GameVersion, Champion, ChampionGameData, StaticGameData
+from lolapi.models import Region, Summoner
+from lolapi.models import HistoricalMatch
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
@@ -20,10 +22,11 @@ from django.db import transaction
 def main():
     # Arguments
     if len(sys.argv) < 2:
-        print('Usage: python proto_data_gathering.py SummonerNameWithoutSpaces')
+        print('Usage: python proto_data_gathering.py Region SummonerNameWithoutSpaces')
         sys.exit(1)
     api_key = os.environ['RIOT_API_KEY']
-    target_summoner_name = sys.argv[1]
+    region = sys.argv[1].upper()
+    target_summoner_name = sys.argv[2]
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
     request_history_timestamps = []
 
@@ -32,7 +35,7 @@ def main():
 
     # (GET) Summoner data => account_id
     summoner_r = request_riotapi(
-        r_endpoints.SUMMONER_BY_NAME(api_hosts.get_host_by_region('EUW'), target_summoner_name, api_key),
+        r_endpoints.SUMMONER_BY_NAME(api_hosts.get_host_by_region(region), target_summoner_name, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Summoner by-name "{}" . . . '.format(target_summoner_name)
@@ -41,7 +44,7 @@ def main():
 
     # (GET) Matchlist => matches
     matchlist_r = request_riotapi(
-        r_endpoints.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region('EUW'), account_id, api_key),
+        r_endpoints.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region(region), account_id, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Matchlist of account "{}" (with filter QueueType=420) . . . '.format(account_id)
@@ -53,9 +56,17 @@ def main():
     losses = 0
     known_game_versions = list(GameVersion.objects.all())
     for match_preview in matches:
+        # If RiotApi errors - break loop
         try:
-            # Check if match already exists in database
-            pass
+
+            # Check the region exists in database - else create it
+            try:
+                match_region = api_hosts.get_region_by_platform(match_preview['platformId'])
+                matching_region = Region.objects.get(name=match_region)
+            except ObjectDoesNotExist:
+                matching_region = Region(name=match_region)
+                matching_region.save()
+
             # If exists - fetch it
             pass
             # If has static data already - skip that - else load new
@@ -64,7 +75,10 @@ def main():
             pass
             # If didn't exist - create one
             match_r = request_riotapi(
-                r_endpoints.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
+                r_endpoints.MATCH_BY_MATCH_ID(
+                    api_hosts.get_host_by_platform(match_preview['platformId']),
+                    match_preview['gameId'],
+                    api_key),
                 app_rate_limits,
                 request_history_timestamps,
                 'Requesting match #{} . . . '.format(match_preview['gameId'])
@@ -290,6 +304,14 @@ class RegionalRiotapiHosts:
         try:
             matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region)
             return matching_host
+        except StopIteration:
+            return None
+
+    def get_region_by_platform(self, platform):
+        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
+        try:
+            matching_region = next(ref['region'] for h, ref in self.__hosts.items() if (platform in ref['platforms']))
+            return matching_region
         except StopIteration:
             return None
 

@@ -43,3 +43,50 @@ class StaticGameData(models.Model):
     items_data_json = models.TextField()
     summonerspells_data_json = models.TextField()
     runes_data_json = models.TextField()
+
+
+# Player data
+
+
+class Region(models.Model):
+    """A game server (or regional group of game servers)"""
+    name = models.CharField(primary_key=True, max_length=255)
+
+
+class Summoner(models.Model):
+    """A player's game account per specific game server"""
+    account_id = models.BigIntegerField()
+    summoner_id = models.BigIntegerField()
+    latest_name = models.CharField(max_length=255)
+    region = models.ForeignKey(
+        'Region',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+
+    class Meta:
+        unique_together = (('region', 'account_id'), ('region', 'summoner_id'))
+
+
+# Match history data
+
+
+class HistoricalMatch(models.Model):
+    """A match that has ended; Match-ID per specific game server"""
+    match_id = models.BigIntegerField()
+    region = models.ForeignKey(
+        'Region',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    game_version = models.ForeignKey(
+        'GameVersion',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    regional_tier_avg = models.CharField(max_length=255)
+    match_result_json = models.TextField(null=True)
+    match_timeline_json = models.TextField(null=True)
+
+    class Meta:
+        unique_together = tuple(('match_id', 'region'))
