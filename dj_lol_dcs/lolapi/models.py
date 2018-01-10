@@ -1,15 +1,20 @@
 from django.db import models
 
+# Static game data
+
 
 class GameVersion(models.Model):
+    """Game client version (SemVer based)"""
     id = models.CharField(primary_key=True, max_length=255)
 
 
 class Champion(models.Model):
+    """Champion name enumeration"""
     name = models.CharField(primary_key=True, max_length=255)
 
 
 class ChampionGameData(models.Model):
+    """Champion data per specific game client version"""
     game_version = models.ForeignKey(
         'GameVersion',
         on_delete=models.CASCADE
@@ -25,6 +30,7 @@ class ChampionGameData(models.Model):
 
 
 class StaticGameData(models.Model):
+    """Aggregate of game client data per specific game client version"""
     game_version = models.ForeignKey(
         'GameVersion',
         primary_key=True,
