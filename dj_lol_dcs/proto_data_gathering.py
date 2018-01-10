@@ -9,6 +9,11 @@ import time
 import lolapi.app_lib.riotapi_endpoints as r_endpoints
 import lolapi.app_lib.datadragon_endpoints as d_endpoints
 
+import django
+os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
+django.setup()
+from lolapi.models import GameVersion
+
 
 def main():
     # Arguments
@@ -44,6 +49,7 @@ def main():
     # Calculate wins/losses/%
     wins = 0
     losses = 0
+    known_game_versions = [v.id for v in list(GameVersion.objects.all())]
     for match_preview in matches:
         try:
             # Check if match already exists in database
@@ -64,11 +70,19 @@ def main():
             match = match_r.json()
             # Parse match's version (major.minor , split-by-. [:2] join-by-.)
             match_version = '.'.join(match['gameVersion'].split('.')[0:2])
-            print(match_version)
-            # Load known versions
-            pass
-            # Confirm match's version exists in known versions - get first (earliest) match - check if static data in db
-            pass
+            # Confirm match's version exists in known versions - get first (earliest) match
+            matching_version = next(
+                filter(lambda ver: '.'.join(ver.split('.')[0:2]) == match_version, known_game_versions),
+                None
+            )
+            # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
+            updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
+            new_game_versions = [ver for ver in updated_game_versions if ver not in known_game_versions]
+            for new_game_version in new_game_versions:
+                print('Saving new game version {}'.format(new_game_version))
+                new_ver = GameVersion(id=new_game_version)
+                new_ver.save()
+            known_game_versions = [v.id for v in list(GameVersion.objects.all())]
             # If static data not in db - load it from this version if available
             pass
             # If doesn't exist - update known versions - load static data from this version if available
