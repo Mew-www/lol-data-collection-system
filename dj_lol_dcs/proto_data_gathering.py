@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-
 import os
 import sys
 import requests
 import json
 from operator import itemgetter
 import time
+
+import dj_lol_dcs.riotapi_endpoints as endpoint
 
 
 def main():
@@ -18,12 +19,12 @@ def main():
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
     request_history_timestamps = []
 
+    # API init
+    api_hosts = RegionalRiotapiHosts()
+
     # (GET) Summoner data => account_id
     summoner_r = request_riotapi(
-        "https://{}/lol/summoner/v3/summoners/by-name/{}?api_key={}".format(
-            'euw1.api.riotgames.com',
-            target_summoner_name,
-            api_key),
+        endpoint.SUMMONER_BY_NAME_URL(api_hosts.get_host_by_region('EUW'), target_summoner_name, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Summoner by-name "{}" . . . '.format(target_summoner_name)
@@ -32,10 +33,7 @@ def main():
 
     # (GET) Matchlist => matches
     matchlist_r = request_riotapi(
-        "https://{}/lol/match/v3/matchlists/by-account/{}?queue=420&api_key={}".format(
-            'euw1.api.riotgames.com',
-            account_id,
-            api_key),
+        endpoint.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region('EUW'), account_id, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Matchlist of account "{}" (with filter QueueType=420) . . . '.format(account_id)
@@ -77,10 +75,7 @@ def main():
 
             # (GET) Match
             match_r = request_riotapi(
-                "https://{}/lol/match/v3/matches/{}?api_key={}".format(
-                    'euw1.api.riotgames.com',
-                    match_preview['gameId'],
-                    api_key),
+                endpoint.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
                 app_rate_limits,
                 request_history_timestamps,
                 'Requesting match #{} . . . '.format(match_preview['gameId'])
@@ -213,7 +208,7 @@ def check_rate_limits(limits, request_history):
     return True, None
 
 
-class RegionalEndpoints:
+class RegionalRiotapiHosts:
     """Region <=references=> Platform <=references=> Host; Platforms are multiple for NA1/NA"""
     __hosts = {
         "br1.api.riotgames.com":  {'platforms': ["BR1"],       'region': "BR"},
