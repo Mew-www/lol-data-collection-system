@@ -6,7 +6,8 @@ import json
 from operator import itemgetter
 import time
 
-import dj_lol_dcs.riotapi_endpoints as endpoint
+import dj_lol_dcs.riotapi_endpoints as r_endpoints
+import dj_lol_dcs.datadragon_endpoints as d_endpoints
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
 
     # (GET) Summoner data => account_id
     summoner_r = request_riotapi(
-        endpoint.SUMMONER_BY_NAME_URL(api_hosts.get_host_by_region('EUW'), target_summoner_name, api_key),
+        r_endpoints.SUMMONER_BY_NAME(api_hosts.get_host_by_region('EUW'), target_summoner_name, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Summoner by-name "{}" . . . '.format(target_summoner_name)
@@ -33,7 +34,7 @@ def main():
 
     # (GET) Matchlist => matches
     matchlist_r = request_riotapi(
-        endpoint.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region('EUW'), account_id, api_key),
+        r_endpoints.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region('EUW'), account_id, api_key),
         app_rate_limits,
         request_history_timestamps,
         'Requesting Matchlist of account "{}" (with filter QueueType=420) . . . '.format(account_id)
@@ -75,7 +76,7 @@ def main():
 
             # (GET) Match
             match_r = request_riotapi(
-                endpoint.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
+                r_endpoints.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
                 app_rate_limits,
                 request_history_timestamps,
                 'Requesting match #{} . . . '.format(match_preview['gameId'])

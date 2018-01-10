@@ -1,6 +1,6 @@
 """Centralized location for (Riot-)API endpoints"""
 
-SUMMONER_BY_NAME_URL = lambda api_host, name, api_key: (
+SUMMONER_BY_NAME = lambda api_host, name, api_key: (
     "https://{}/lol/summoner/v3/summoners/by-name/{}?api_key={}".format(
         api_host,
         name,
@@ -18,4 +18,4 @@ MATCH_BY_MATCH_ID = lambda api_host, match_id, api_key: (
         match_id,
         api_key)
 )
-VERSIONS_URL = 'https://ddragon.leagueoflegends.com/api/versions.json'
+
