@@ -47,6 +47,34 @@ def main():
     losses = 0
     for match_preview in matches:
         try:
+            # # Match data
+            # Check if match already exists in database
+            pass
+            # If exists - fetch it
+            pass
+            # If has static data already - skip that - else load new
+            pass
+            # If has timeline data already - skip that - else load new
+            pass
+            # If didn't exist - create one
+            # # Versioning / static data
+            # Parse match's version (major.minor , split-by-. [:2] join-by-.
+            pass
+            # Load known versions
+            pass
+            # Confirm match's version exists in known versions - get first (earliest) match - check if static data in db
+            pass
+            # If static data not in db - load it from this version if available
+            pass
+            # If doesn't exist - update known versions - load static data from this version if available
+            pass
+            # If fails - never mind - (unable to load static data, may leave uncertainties)
+            pass
+            # Set match version to parsed one
+            pass
+            # Save
+            pass
+
             # (GET) Match
             match_r = request_riotapi(
                 "https://{}/lol/match/v3/matches/{}?api_key={}".format(
