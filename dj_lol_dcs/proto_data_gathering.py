@@ -6,8 +6,8 @@ import json
 from operator import itemgetter
 import time
 
-import dj_lol_dcs.riotapi_endpoints as r_endpoints
-import dj_lol_dcs.datadragon_endpoints as d_endpoints
+import lolapi.app_lib.riotapi_endpoints as r_endpoints
+import lolapi.app_lib.datadragon_endpoints as d_endpoints
 
 
 def main():
@@ -46,7 +46,6 @@ def main():
     losses = 0
     for match_preview in matches:
         try:
-            # # Match data
             # Check if match already exists in database
             pass
             # If exists - fetch it
@@ -56,9 +55,16 @@ def main():
             # If has timeline data already - skip that - else load new
             pass
             # If didn't exist - create one
-            # # Versioning / static data
-            # Parse match's version (major.minor , split-by-. [:2] join-by-.
-            pass
+            match_r = request_riotapi(
+                r_endpoints.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
+                app_rate_limits,
+                request_history_timestamps,
+                'Requesting match #{} . . . '.format(match_preview['gameId'])
+            )
+            match = match_r.json()
+            # Parse match's version (major.minor , split-by-. [:2] join-by-.)
+            match_version = '.'.join(match['gameVersion'].split('.')[0:2])
+            print(match_version)
             # Load known versions
             pass
             # Confirm match's version exists in known versions - get first (earliest) match - check if static data in db
@@ -73,15 +79,6 @@ def main():
             pass
             # Save
             pass
-
-            # (GET) Match
-            match_r = request_riotapi(
-                r_endpoints.MATCH_BY_MATCH_ID(api_hosts.get_host_by_region('EUW'), match_preview['gameId'], api_key),
-                app_rate_limits,
-                request_history_timestamps,
-                'Requesting match #{} . . . '.format(match_preview['gameId'])
-            )
-            match = match_r.json()
 
             # Seek target data-set
             target_identity = next(
