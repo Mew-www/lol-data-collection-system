@@ -12,7 +12,9 @@ import lolapi.app_lib.datadragon_endpoints as d_endpoints
 import django
 os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
 django.setup()
-from lolapi.models import GameVersion
+from lolapi.models import GameVersion, Champion, ChampionGameData, StaticGameData
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 
 
 def main():
@@ -49,7 +51,7 @@ def main():
     # Calculate wins/losses/%
     wins = 0
     losses = 0
-    known_game_versions = [v.id for v in list(GameVersion.objects.all())]
+    known_game_versions = list(GameVersion.objects.all())
     for match_preview in matches:
         try:
             # Check if match already exists in database
@@ -69,26 +71,64 @@ def main():
             )
             match = match_r.json()
             # Parse match's version (major.minor , split-by-. [:2] join-by-.)
-            match_version = '.'.join(match['gameVersion'].split('.')[0:2])
+            match_version_id = '.'.join(match['gameVersion'].split('.')[0:2])
             # Confirm match's version exists in known versions - get first (earliest) match
-            matching_version = next(
-                filter(lambda ver: '.'.join(ver.split('.')[0:2]) == match_version, known_game_versions),
+            matching_known_version = next(
+                filter(lambda ver: '.'.join(ver.id.split('.')[0:2]) == match_version_id, known_game_versions),
                 None
             )
             # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
-            updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
-            new_game_versions = [ver for ver in updated_game_versions if ver not in known_game_versions]
-            for new_game_version in new_game_versions:
-                print('Saving new game version {}'.format(new_game_version))
-                new_ver = GameVersion(id=new_game_version)
-                new_ver.save()
-            known_game_versions = [v.id for v in list(GameVersion.objects.all())]
-            # If static data not in db - load it from this version if available
-            pass
-            # If doesn't exist - update known versions - load static data from this version if available
-            pass
-            # If fails - never mind - (unable to load static data, may leave uncertainties)
-            pass
+            if not matching_known_version:
+                updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
+                new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_versions]
+                for version_id in new_game_version_ids:
+                    print('Saving new game version {}'.format(version_id))
+                    new_ver = GameVersion(id=version_id)
+                    new_ver.save()
+                known_game_versions = list(GameVersion.objects.all())
+                matching_known_version = next(
+                    filter(lambda ver: '.'.join(ver.id.split('.')[0:2]) == match_version_id, known_game_versions),
+                    None
+                )
+            # If found a matching version (else never mind) - check it's static data exists
+            if matching_known_version:
+                try:
+                    # Try to query (if it'd exist)
+                    StaticGameData.objects.get(game_version=matching_known_version)
+                except ObjectDoesNotExist:
+                    print('Found no matching static data set, for version {}'.format(matching_known_version.id))
+                    # If any of the requests to DataDragon fails, don't save partial static data
+                    with transaction.atomic():
+                        profile_icons = requests.get(d_endpoints.PROFILE_ICONS(matching_known_version.id)).json()
+                        champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(matching_known_version.id)).json()
+                        champion_gamedata_models = []
+                        for key, c in champions_list['data'].items():
+                            print('Requesting {} for version {}'.format(c['id'], matching_known_version.id))
+                            gamedata = requests.get(d_endpoints.CHAMPION(matching_known_version.id, c['id'])).json()
+                            try:
+                                champion_model = Champion.objects.get(name=c['name'])
+                            except ObjectDoesNotExist:
+                                champion_model = Champion(name=c['name'])
+                                champion_model.save()
+                            champion_gamedata_model = ChampionGameData(
+                                game_version=matching_known_version,
+                                champion=champion_model,
+                                data_json=json.dumps(gamedata)
+                            )
+                            champion_gamedata_model.save()
+                            champion_gamedata_models.append(champion_gamedata_model)
+                        items = requests.get(d_endpoints.ITEMS(matching_known_version.id)).json()
+                        summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(matching_known_version.id)).json()
+                        runes = requests.get(d_endpoints.RUNES(matching_known_version.id)).json()
+                        matching_static_data = StaticGameData(
+                            game_version=matching_known_version,
+                            profile_icons_data_json=json.dumps(profile_icons),
+                            items_data_json=json.dumps(items),
+                            summonerspells_data_json=json.dumps(summonerspells),
+                            runes_data_json=json.dumps(runes),
+                        )
+                        matching_static_data.champions_data.set(champion_gamedata_models)
+                        matching_static_data.save()
             # Set match version to parsed one
             pass
             # Save
