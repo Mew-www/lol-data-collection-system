@@ -3,11 +3,13 @@ import os
 import sys
 import requests
 import json
-from operator import itemgetter
-import time
 
 import lolapi.app_lib.riotapi_endpoints as r_endpoints
 import lolapi.app_lib.datadragon_endpoints as d_endpoints
+from lolapi.app_lib.regional_riotapi_hosts import RegionalRiotapiHosts
+from lolapi.app_lib.riot_api import RiotApi
+from lolapi.app_lib.api_key_container import ApiKeyContainer
+from lolapi.app_lib.exceptions import RiotApiError, ConfigurationError, RatelimitMismatchError
 
 import django
 os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
@@ -31,7 +33,7 @@ def main():
 
     # API init
     api_hosts = RegionalRiotapiHosts()
-    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), RegionalRiotapiHosts(), r_endpoints)
+    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), api_hosts, r_endpoints)
 
     # (GET) Summoner data => account_id
     print('Requesting Summoner by-name "{}" . . . '.format(target_summoner_name))
@@ -169,183 +171,6 @@ def main():
 
     print("{} wins ({}%), {} losses ({}%)"
           .format(wins, round(wins/(wins+losses)*100), losses, round(losses/(wins+losses)*100)))
-
-
-class ApiKeyContainer:
-    """Container for API-key and respective app-rate-limit(s); Encapsulates and aggregates them together"""
-
-    def __init__(self, api_key, app_rate_limits):
-        self.__api_key = api_key
-        self.__app_rate_limits = app_rate_limits
-
-    def get_api_key(self):
-        return self.__api_key
-
-    def get_app_rate_limits(self):
-        return self.__app_rate_limits
-
-    def change_key(self, new_api_key, new_app_rate_limits):
-        self.__api_key = new_api_key
-        self.__app_rate_limits = new_app_rate_limits
-
-
-class RiotApi:
-
-    def __init__(self, api_key_container, api_hosts, regional_endpoints):
-        self.__api_key_container = api_key_container
-        self.__api_hosts = api_hosts
-        self.__regional_endpoints = regional_endpoints
-        self.__request_history = []
-
-    def __check_app_rate_limits(self):
-        configured_limits = self.__api_key_container.get_app_rate_limits()
-        epoch_now = int(time.time())
-        for limit in configured_limits:
-            max_requests_in_timeframe, timeframe_size = limit
-            timeframe_start = epoch_now - timeframe_size
-            requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start,
-                                                     self.__request_history))
-            print("[{}/{}, in {} second timeframe]".format(
-                len(requests_done_in_timeframe),
-                max_requests_in_timeframe,
-                timeframe_size))
-            if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
-                return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
-        return True, None
-
-    def __validate_app_rate_limits(self, received_limits):
-        configured_limits = self.__api_key_container.get_app_rate_limits()
-
-        # Compare length
-        if len(configured_limits) != len(received_limits):
-            msg = 'Misconfiguration (number of limits) in {}: defined {}, received from API {}'.format(
-                "app-rate-limits",
-                json.dumps(configured_limits),
-                json.dumps(received_limits))
-            raise RatelimitMismatchError(msg)
-
-        # Compare contents (sorted per seconds-interval-limit)
-        for idx, limit in enumerate(sorted(received_limits, key=itemgetter(1))):
-            if configured_limits[idx][1] != int(limit[1]):
-                msg = 'Misconfiguration (interval mismatch) in {}: defined {}, received from API {}'.format(
-                    "app-rate-limits",
-                    json.dumps(configured_limits),
-                    json.dumps(received_limits))
-                raise RatelimitMismatchError(msg)
-
-            if configured_limits[idx][0] != int(limit[0]):
-                msg = 'Misconfiguration (max-requests mismatch) in {}: defined {}, received from API {}'.format(
-                    "app-rate-limits",
-                    json.dumps(configured_limits),
-                    json.dumps(received_limits))
-                raise RatelimitMismatchError(msg)
-
-    def __get(self, url):
-        # Check rate-limit quotas, catches first full quota
-        ok, wait_seconds = self.__check_app_rate_limits()
-        while not ok:
-            time.sleep(wait_seconds)
-            # Re-check in case if multiple quotas full simultaneously
-            ok, wait_seconds = self.__check_app_rate_limits()
-
-        # Update request history and do request
-        self.__request_history.append(int(time.time()))
-        response = requests.get(url)
-
-        # Check response status
-        if response.status_code != 200:
-            raise RiotApiError(response)
-
-        # Confirm app-rate-limit(s); Received format e.g. "10:1,100:10,6000:600,36000:3600" => transform to [[n,s], ..]
-        received_app_rate_limits = [l.split(':') for l in response.headers['X-App-Rate-Limit'].split(',')]
-        self.__validate_app_rate_limits(received_app_rate_limits)
-
-        return response
-
-    def get_summoner(self, region, name):
-        return self.__get(r_endpoints.SUMMONER_BY_NAME(self.__api_hosts.get_host_by_region(region),
-                                                       name,
-                                                       self.__api_key_container.get_api_key()))
-
-    def get_matchlist(self, region, account_id):
-        return self.__get(r_endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region),
-                                                              account_id,
-                                                              self.__api_key_container.get_api_key()))
-
-    def get_match_result(self, platform, match_id):
-        return self.__get(r_endpoints.MATCH_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
-                                                        match_id,
-                                                        self.__api_key_container.get_api_key()))
-
-    def get_match_timeline(self, platform, match_id):
-        return self.__get(r_endpoints.TIMELINE_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
-                                                           match_id,
-                                                           self.__api_key_container.get_api_key()))
-
-
-class RegionalRiotapiHosts:
-    """Region <=references=> Platform <=references=> Host; Platforms are multiple for NA1/NA"""
-    __hosts = {
-        "br1.api.riotgames.com":  {'platforms': ["BR1"],       'region': "BR"},
-        "eun1.api.riotgames.com": {'platforms': ["EUN1"],      'region': "EUNE"},
-        "euw1.api.riotgames.com": {'platforms': ["EUW1"],      'region': "EUW"},
-        "jp1.api.riotgames.com":  {'platforms': ["JP1"],       'region': "JP"},
-        "kr.api.riotgames.com":   {'platforms': ["KR"],        'region': "KR"},
-        "la1.api.riotgames.com":  {'platforms': ["LA1"],       'region': "LAN"},
-        "la2.api.riotgames.com":  {'platforms': ["LA2"],       'region': "LAS"},
-        "na1.api.riotgames.com":  {'platforms': ["NA1", "NA"], 'region': "NA"},
-        "oc1.api.riotgames.com":  {'platforms': ["OC1"],       'region': "OCE"},
-        "tr1.api.riotgames.com":  {'platforms': ["TR1"],       'region': "TR"},
-        "ru.api.riotgames.com":   {'platforms': ["RU"],        'region': "RU"},
-        "pbe1.api.riotgames.com": {'platforms': ["PBE1"],      'region': "PBE"}
-    }
-
-    def get_host_by_platform(self, platform):
-        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
-        try:
-            matching_host = next(host for host, ref in self.__hosts.items() if (platform in ref['platforms']))
-            return matching_host
-        except StopIteration:
-            return None
-
-    def get_host_by_region(self, region):
-        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
-        try:
-            matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region)
-            return matching_host
-        except StopIteration:
-            return None
-
-    def get_region_by_platform(self, platform):
-        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
-        try:
-            matching_region = next(ref['region'] for h, ref in self.__hosts.items() if (platform in ref['platforms']))
-            return matching_region
-        except StopIteration:
-            return None
-
-
-# API-response HTTP exceptions
-##
-class RiotApiError(Exception):
-    """<base class> Raise when RiotGames API returns non-2xx response"""
-    def __init__(self, api_response):
-        msg = "HTTP Error {}".format(api_response.status_code)
-        self.message = msg
-        self.response = api_response
-        super(RiotApiError, self).__init__(msg)
-
-
-# Exceptions that indicate "something requires re-configuring"
-##
-class ConfigurationError(Exception):
-    """<base class> Raise when something wrongly configured, presumably fatal."""
-    pass
-
-
-class RatelimitMismatchError(ConfigurationError):
-    """Raise when validating ratelimit (configured <=> api_response.headers) fails."""
-    pass
 
 
 if __name__ == "__main__":
