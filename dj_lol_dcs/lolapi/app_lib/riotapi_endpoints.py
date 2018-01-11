@@ -18,4 +18,9 @@ MATCH_BY_MATCH_ID = lambda api_host, match_id, api_key: (
         match_id,
         api_key)
 )
-
+TIMELINE_BY_MATCH_ID = lambda api_host, match_id, api_key: (
+    "https://{}/lol/match/v3/timelines/by-match/{}?api_key={}".format(
+        api_host,
+        match_id,
+        api_key)
+)

@@ -84,7 +84,7 @@ class HistoricalMatch(models.Model):
         on_delete=models.SET_NULL,
         null=True
     )
-    regional_tier_avg = models.CharField(max_length=255)
+    regional_tier_avg = models.CharField(max_length=255, null=True)
     match_result_json = models.TextField(null=True)
     match_timeline_json = models.TextField(null=True)
 
