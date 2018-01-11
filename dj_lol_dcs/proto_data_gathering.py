@@ -24,33 +24,22 @@ def main():
     if len(sys.argv) < 2:
         print('Usage: python proto_data_gathering.py Region SummonerNameWithoutSpaces')
         sys.exit(1)
-    api_key = os.environ['RIOT_API_KEY']
     region = sys.argv[1].upper()
     target_summoner_name = sys.argv[2]
+    api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
-    request_history_timestamps = []
 
     # API init
     api_hosts = RegionalRiotapiHosts()
+    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), RegionalRiotapiHosts(), r_endpoints)
 
     # (GET) Summoner data => account_id
-    summoner_r = request_riotapi(
-        r_endpoints.SUMMONER_BY_NAME(api_hosts.get_host_by_region(region), target_summoner_name, api_key),
-        app_rate_limits,
-        request_history_timestamps,
-        'Requesting Summoner by-name "{}" . . . '.format(target_summoner_name)
-    )
-    summoner = summoner_r.json()
-    account_id = summoner['accountId']
+    print('Requesting Summoner by-name "{}" . . . '.format(target_summoner_name))
+    summoner = riotapi.get_summoner(region, target_summoner_name).json()
 
     # (GET) Matchlist => matches
-    matchlist_r = request_riotapi(
-        r_endpoints.MATCHLIST_BY_ACCOUNT_ID(api_hosts.get_host_by_region(region), account_id, api_key),
-        app_rate_limits,
-        request_history_timestamps,
-        'Requesting Matchlist of account "{}" (with filter QueueType=420) . . . '.format(account_id)
-    )
-    matches = matchlist_r.json()['matches']
+    print('Requesting Matchlist of account "{}" (with filter QueueType=420) . . . '.format(summoner['accountId']))
+    matches = riotapi.get_matchlist(region, summoner['accountId']).json()['matches']
 
     # Calculate wins/losses/%
     wins = 0
@@ -73,16 +62,8 @@ def main():
                 match_result = json.loads(match.match_result_json)
                 print('Match #{} existed in database, using existing dataset'.format(match_preview['gameId']))
             except ObjectDoesNotExist:
-                match_r = request_riotapi(
-                    r_endpoints.MATCH_BY_MATCH_ID(
-                        api_hosts.get_host_by_platform(match_preview['platformId']),
-                        match_preview['gameId'],
-                        api_key),
-                    app_rate_limits,
-                    request_history_timestamps,
-                    'Requesting results for match #{} . . . '.format(match_preview['gameId'])
-                )
-                match_result = match_r.json()
+                print('Requesting results for match #{} . . . '.format(match_preview['gameId']))
+                match_result = riotapi.get_match_result(match_preview['platformId'], match_preview['gameId']).json()
                 # Parse match's version (major.minor , split-by-. [:2] join-by-.) - if below 7.22 then skip match
                 if (int(match_result['gameVersion'].split('.')[0]) <= 7
                         and int(match_result['gameVersion'].split('.')[1]) <= 22):
@@ -145,16 +126,8 @@ def main():
                             )
                             matching_static_data.champions_data.set(champion_gamedata_models)
                             matching_static_data.save()
-                timeline_r = request_riotapi(
-                    r_endpoints.TIMELINE_BY_MATCH_ID(
-                        api_hosts.get_host_by_platform(match_preview['platformId']),
-                        match_preview['gameId'],
-                        api_key),
-                    app_rate_limits,
-                    request_history_timestamps,
-                    'Requesting timeline for match #{} . . . '.format(match_preview['gameId'])
-                )
-                match_timeline = timeline_r.json()
+                print('Requesting timeline for match #{} . . . '.format(match_preview['gameId']))
+                match_timeline = riotapi.get_match_timeline(match_preview['platformId'], match_preview['gameId']).json()
                 new_match = HistoricalMatch(
                     match_id=match_preview['gameId'],
                     region=matching_region,
@@ -167,7 +140,7 @@ def main():
             # Seek target data-set
             target_identity = next(
                 filter(
-                    lambda identity: identity['player']['accountId'] == account_id,
+                    lambda identity: identity['player']['accountId'] == summoner['accountId'],
                     match_result['participantIdentities']),
                 None
             )
@@ -218,78 +191,96 @@ class ApiKeyContainer:
 
 class RiotApi:
 
-    def __init__(self, api_key_container, regional_endpoints):
+    def __init__(self, api_key_container, api_hosts, regional_endpoints):
         self.__api_key_container = api_key_container
+        self.__api_hosts = api_hosts
         self.__regional_endpoints = regional_endpoints
-        pass
+        self.__request_history = []
 
+    def __check_app_rate_limits(self):
+        configured_limits = self.__api_key_container.get_app_rate_limits()
+        epoch_now = int(time.time())
+        for limit in configured_limits:
+            max_requests_in_timeframe, timeframe_size = limit
+            timeframe_start = epoch_now - timeframe_size
+            requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start,
+                                                     self.__request_history))
+            print("[{}/{}, in {} second timeframe]".format(
+                len(requests_done_in_timeframe),
+                max_requests_in_timeframe,
+                timeframe_size))
+            if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
+                return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
+        return True, None
 
-def request_riotapi(url, app_rate_limits, request_history_timestamps, pre_request_print=None):
+    def __validate_app_rate_limits(self, received_limits):
+        configured_limits = self.__api_key_container.get_app_rate_limits()
 
-    # Check rate-limit quotas, catches first full quota
-    ok, wait_seconds = check_rate_limits(app_rate_limits, request_history_timestamps)
-    while not ok:
-        time.sleep(wait_seconds)
-        # Re-check in case if multiple quotas full simultaneously
-        ok, wait_seconds = check_rate_limits(app_rate_limits, request_history_timestamps)
-
-    # Update request history
-    request_history_timestamps.append(int(time.time()))
-
-    # (GET)
-    if pre_request_print:
-        print(pre_request_print, end='')
-    response = requests.get(url)
-
-    # Check response status
-    if response.status_code == 200:
-        print('200 - OK')
-    else:
-        raise RiotApiError(response)
-
-    # Confirm app-rate-limit(s); Received format e.g. "100:1,1000:10,60000:600,360000:3600" => transform to [[n,s], ..]
-    received_app_rate_limits = [l.split(':') for l in response.headers['X-App-Rate-Limit'].split(',')]
-    validate_rate_limits("APP_RATE_LIMIT", app_rate_limits, received_app_rate_limits)
-
-    return response
-
-
-def validate_rate_limits(limit_name, configured_limits, received_limits):
-    # Compare length
-    if len(configured_limits) != len(received_limits):
-        msg = 'Misconfiguration (number of limits) in {}: defined {}, received from API {}'.format(
-            limit_name,
-            json.dumps(configured_limits),
-            json.dumps(received_limits))
-        raise RatelimitMismatchError(msg)
-
-    # Compare contents (sorted per seconds-interval-limit)
-    for idx, limit in enumerate(sorted(received_limits, key=itemgetter(1))):
-        if configured_limits[idx][1] != int(limit[1]):
-            msg = 'Misconfiguration (interval mismatch) in {}: defined {}, received from API {}'.format(
-                limit_name,
+        # Compare length
+        if len(configured_limits) != len(received_limits):
+            msg = 'Misconfiguration (number of limits) in {}: defined {}, received from API {}'.format(
+                "app-rate-limits",
                 json.dumps(configured_limits),
                 json.dumps(received_limits))
             raise RatelimitMismatchError(msg)
 
-        if configured_limits[idx][0] != int(limit[0]):
-            msg = 'Misconfiguration (max-requests mismatch) in {}: defined {}, received from API {}'.format(
-                limit_name,
-                json.dumps(configured_limits),
-                json.dumps(received_limits))
-            raise RatelimitMismatchError(msg)
+        # Compare contents (sorted per seconds-interval-limit)
+        for idx, limit in enumerate(sorted(received_limits, key=itemgetter(1))):
+            if configured_limits[idx][1] != int(limit[1]):
+                msg = 'Misconfiguration (interval mismatch) in {}: defined {}, received from API {}'.format(
+                    "app-rate-limits",
+                    json.dumps(configured_limits),
+                    json.dumps(received_limits))
+                raise RatelimitMismatchError(msg)
 
+            if configured_limits[idx][0] != int(limit[0]):
+                msg = 'Misconfiguration (max-requests mismatch) in {}: defined {}, received from API {}'.format(
+                    "app-rate-limits",
+                    json.dumps(configured_limits),
+                    json.dumps(received_limits))
+                raise RatelimitMismatchError(msg)
 
-def check_rate_limits(limits, request_history):
-    epoch_now = int(time.time())
-    for limit in limits:
-        max_requests_in_timeframe, timeframe_size = limit
-        timeframe_start = epoch_now - timeframe_size
-        requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start, request_history))
-        print("[{}/{}, in {} second timeframe]".format(len(requests_done_in_timeframe), max_requests_in_timeframe, timeframe_size))
-        if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
-            return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
-    return True, None
+    def __get(self, url):
+        # Check rate-limit quotas, catches first full quota
+        ok, wait_seconds = self.__check_app_rate_limits()
+        while not ok:
+            time.sleep(wait_seconds)
+            # Re-check in case if multiple quotas full simultaneously
+            ok, wait_seconds = self.__check_app_rate_limits()
+
+        # Update request history and do request
+        self.__request_history.append(int(time.time()))
+        response = requests.get(url)
+
+        # Check response status
+        if response.status_code != 200:
+            raise RiotApiError(response)
+
+        # Confirm app-rate-limit(s); Received format e.g. "10:1,100:10,6000:600,36000:3600" => transform to [[n,s], ..]
+        received_app_rate_limits = [l.split(':') for l in response.headers['X-App-Rate-Limit'].split(',')]
+        self.__validate_app_rate_limits(received_app_rate_limits)
+
+        return response
+
+    def get_summoner(self, region, name):
+        return self.__get(r_endpoints.SUMMONER_BY_NAME(self.__api_hosts.get_host_by_region(region),
+                                                       name,
+                                                       self.__api_key_container.get_api_key()))
+
+    def get_matchlist(self, region, account_id):
+        return self.__get(r_endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region),
+                                                              account_id,
+                                                              self.__api_key_container.get_api_key()))
+
+    def get_match_result(self, platform, match_id):
+        return self.__get(r_endpoints.MATCH_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
+                                                        match_id,
+                                                        self.__api_key_container.get_api_key()))
+
+    def get_match_timeline(self, platform, match_id):
+        return self.__get(r_endpoints.TIMELINE_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
+                                                           match_id,
+                                                           self.__api_key_container.get_api_key()))
 
 
 class RegionalRiotapiHosts:
