@@ -5,12 +5,12 @@ from django.db import models
 
 class GameVersion(models.Model):
     """Game client version (SemVer based)"""
-    id = models.CharField(primary_key=True, max_length=255)
+    semver = models.CharField(max_length=255, unique=True)
 
 
 class Champion(models.Model):
     """Champion name enumeration"""
-    name = models.CharField(primary_key=True, max_length=255)
+    name = models.CharField(max_length=255, unique=True)
 
 
 class ChampionGameData(models.Model):
@@ -33,7 +33,7 @@ class StaticGameData(models.Model):
     """Aggregate of game client data per specific game client version"""
     game_version = models.ForeignKey(
         'GameVersion',
-        primary_key=True,
+        unique=True,
         on_delete=models.CASCADE
     )
     profile_icons_data_json = models.TextField()
@@ -50,7 +50,7 @@ class StaticGameData(models.Model):
 
 class Region(models.Model):
     """A game server (or regional group of game servers)"""
-    name = models.CharField(primary_key=True, max_length=255)
+    name = models.CharField(max_length=255, unique=True)
 
 
 class Summoner(models.Model):

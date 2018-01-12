@@ -73,20 +73,22 @@ def main():
                 match_version_id = '.'.join(match_result['gameVersion'].split('.')[0:2])
                 # Confirm match's version exists in known versions - get first (earliest) match
                 matching_known_version = next(
-                    filter(lambda ver: '.'.join(ver.id.split('.')[0:2]) == match_version_id, known_game_versions),
+                    filter(lambda ver: '.'.join(ver.semver.split('.')[0:2]) == match_version_id, known_game_versions),
                     None
                 )
                 # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
                 if not matching_known_version:
                     updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
-                    new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_versions]
+                    known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
+                    new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
                     for version_id in new_game_version_ids:
                         print('Saving new game version {}'.format(version_id))
-                        new_ver = GameVersion(id=version_id)
+                        new_ver = GameVersion(semver=version_id)
                         new_ver.save()
                     known_game_versions = list(GameVersion.objects.all())
                     matching_known_version = next(
-                        filter(lambda ver: '.'.join(ver.id.split('.')[0:2]) == match_version_id, known_game_versions),
+                        filter(lambda gv: '.'.join(gv.semver.split('.')[0:2]) == match_version_id,
+                               known_game_versions),
                         None
                     )
                 # If found a matching version (else never mind) - check it's static data exists
@@ -95,15 +97,16 @@ def main():
                         # Try to query (if it'd exist)
                         StaticGameData.objects.get(game_version=matching_known_version)
                     except ObjectDoesNotExist:
-                        print('Found no matching static data set, for version {}'.format(matching_known_version.id))
+                        match_semver = matching_known_version.semver
+                        print('Found no matching static data set, for version {}'.format(match_semver))
                         # If any of the requests to DataDragon fails, don't save partial static data
                         with transaction.atomic():
-                            profile_icons = requests.get(d_endpoints.PROFILE_ICONS(matching_known_version.id)).json()
-                            champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(matching_known_version.id)).json()
+                            profile_icons = requests.get(d_endpoints.PROFILE_ICONS(match_semver)).json()
+                            champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(match_semver)).json()
                             champion_gamedata_models = []
                             for key, c in champions_list['data'].items():
-                                print('Requesting {} for version {}'.format(c['id'], matching_known_version.id))
-                                gamedata = requests.get(d_endpoints.CHAMPION(matching_known_version.id, c['id'])).json()
+                                print('Requesting {} for version {}'.format(c['id'], match_semver))
+                                gamedata = requests.get(d_endpoints.CHAMPION(match_semver, c['id'])).json()
                                 try:
                                     champion_model = Champion.objects.get(name=c['name'])
                                 except ObjectDoesNotExist:
@@ -116,9 +119,9 @@ def main():
                                 )
                                 champion_gamedata_model.save()
                                 champion_gamedata_models.append(champion_gamedata_model)
-                            items = requests.get(d_endpoints.ITEMS(matching_known_version.id)).json()
-                            summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(matching_known_version.id)).json()
-                            runes = requests.get(d_endpoints.RUNES(matching_known_version.id)).json()
+                            items = requests.get(d_endpoints.ITEMS(match_semver)).json()
+                            summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(match_semver)).json()
+                            runes = requests.get(d_endpoints.RUNES(match_semver)).json()
                             matching_static_data = StaticGameData(
                                 game_version=matching_known_version,
                                 profile_icons_data_json=json.dumps(profile_icons),
@@ -126,8 +129,8 @@ def main():
                                 summonerspells_data_json=json.dumps(summonerspells),
                                 runes_data_json=json.dumps(runes),
                             )
-                            matching_static_data.champions_data.set(champion_gamedata_models)
                             matching_static_data.save()
+                            matching_static_data.champions_data.set(champion_gamedata_models)
                 print('Requesting timeline for match #{} . . . '.format(match_preview['gameId']))
                 match_timeline = riotapi.get_match_timeline(match_preview['platformId'], match_preview['gameId']).json()
                 new_match = HistoricalMatch(
