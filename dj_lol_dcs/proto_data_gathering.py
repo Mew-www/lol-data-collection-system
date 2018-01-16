@@ -64,18 +64,22 @@ def main():
                 match_result = json.loads(match.match_result_json)
                 print('Match #{} existed in database, using existing dataset'.format(match_preview['gameId']))
             except ObjectDoesNotExist:
+                # (GET) Match
                 print('Requesting results for match #{} . . . '.format(match_preview['gameId']))
                 match_result = riotapi.get_match_result(match_preview['platformId'], match_preview['gameId']).json()
+
                 # Parse match's version (major.minor , split-by-. [:2] join-by-.) - if below 7.22 then skip match
                 if (int(match_result['gameVersion'].split('.')[0]) <= 7
                         and int(match_result['gameVersion'].split('.')[1]) <= 22):
                     break
                 match_version_id = '.'.join(match_result['gameVersion'].split('.')[0:2])
+
                 # Confirm match's version exists in known versions - get first (earliest) match
                 matching_known_version = next(
                     filter(lambda ver: '.'.join(ver.semver.split('.')[0:2]) == match_version_id, known_game_versions),
                     None
                 )
+
                 # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
                 if not matching_known_version:
                     updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
@@ -91,6 +95,7 @@ def main():
                                known_game_versions),
                         None
                     )
+
                 # If found a matching version (else never mind) - check it's static data exists
                 if matching_known_version:
                     try:
