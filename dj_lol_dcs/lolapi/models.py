@@ -85,6 +85,8 @@ class HistoricalMatch(models.Model):
         null=True
     )
     regional_tier_avg = models.CharField(max_length=255, null=True)
+    regional_tier_meta = models.CharField(max_length=255, null=True)
+    game_duration = models.IntegerField(null=True)
     match_result_json = models.TextField(null=True)
     match_timeline_json = models.TextField(null=True)
 
