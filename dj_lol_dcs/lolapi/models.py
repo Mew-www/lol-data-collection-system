@@ -68,6 +68,16 @@ class Summoner(models.Model):
         unique_together = (('region', 'account_id'), ('region', 'summoner_id'))
 
 
+class SummonerTierHistory(models.Model):
+    """A player's tier on a given moment in time"""
+    summoner = models.ForeignKey(
+        'Summoner',
+        on_delete=models.CASCADE
+    )
+    at_time = models.DateTimeField(auto_now_add=True)
+    tier = models.CharField(max_length=255)
+
+
 # Match history data
 
 
