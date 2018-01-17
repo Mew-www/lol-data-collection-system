@@ -24,5 +24,7 @@ class Tiers:
     def get_average(self, tiers):
         ranked_tiers = filter(lambda t: t != "UNRANKED", tiers)
         numeric_tiers = list(map(lambda t: int(self.get_numeric_tier_repr(t)), ranked_tiers))
+        if len(numeric_tiers) == 0:
+            return "UNRANKED"
         average_numeric_tier = round(sum(numeric_tiers) / len(numeric_tiers))
         return self.get_textual_tier_repr(average_numeric_tier)
