@@ -15,26 +15,26 @@ class RegionalRiotapiHosts:
         "pbe1.api.riotgames.com": {'platforms': ["PBE1"],      'region': "PBE"}
     }
 
-    def get_host_by_platform(self, platform):
+    def get_host_by_platform(self, platform_name):
         """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
         try:
-            matching_host = next(host for host, ref in self.__hosts.items() if (platform in ref['platforms']))
+            matching_host = next(host for host, ref in self.__hosts.items() if (platform_name in ref['platforms']))
             return matching_host
         except StopIteration:
             return None
 
-    def get_host_by_region(self, region):
+    def get_host_by_region(self, region_name):
         """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
         try:
-            matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region)
+            matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region_name)
             return matching_host
         except StopIteration:
             return None
 
-    def get_region_by_platform(self, platform):
+    def get_region_by_platform(self, platform_name):
         """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
         try:
-            matching_region = next(ref['region'] for h, ref in self.__hosts.items() if (platform in ref['platforms']))
-            return matching_region
+            region_name = next(ref['region'] for h, ref in self.__hosts.items() if (platform_name in ref['platforms']))
+            return region_name
         except StopIteration:
             return None
