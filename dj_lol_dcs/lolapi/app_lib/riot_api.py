@@ -80,22 +80,32 @@ class RiotApi:
 
         return response
 
-    def get_summoner(self, region, name):
-        return self.__get(self.__endpoints.SUMMONER_BY_NAME(self.__api_hosts.get_host_by_region(region),
+    def get_summoner(self, region_name, name):
+        return self.__get(self.__endpoints.SUMMONER_BY_NAME(self.__api_hosts.get_host_by_region(region_name),
                                                             name,
                                                             self.__api_key_container.get_api_key()))
 
-    def get_matchlist(self, region, account_id):
-        return self.__get(self.__endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region),
+    def get_tiers(self, region_name, summoner_id):
+        return self.__get(self.__endpoints.TIERS_BY_SUMMONER_ID(self.__api_hosts.get_host_by_region(region_name),
+                                                                summoner_id,
+                                                                self.__api_key_container.get_api_key()))
+
+    def get_active_match(self, region_name, summoner_id):
+        return self.__get(self.__endpoints.SPECTATOR_BY_SUMMONER_ID(self.__api_hosts.get_host_by_region(region_name),
+                                                                    summoner_id,
+                                                                    self.__api_key_container.get_api_key()))
+
+    def get_matchlist(self, region_name, account_id):
+        return self.__get(self.__endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region_name),
                                                                    account_id,
                                                                    self.__api_key_container.get_api_key()))
 
-    def get_match_result(self, platform, match_id):
-        return self.__get(self.__endpoints.MATCH_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
+    def get_match_result(self, platform_name, match_id):
+        return self.__get(self.__endpoints.MATCH_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform_name),
                                                              match_id,
                                                              self.__api_key_container.get_api_key()))
 
-    def get_match_timeline(self, platform, match_id):
-        return self.__get(self.__endpoints.TIMELINE_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform),
+    def get_match_timeline(self, platform_name, match_id):
+        return self.__get(self.__endpoints.TIMELINE_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform_name),
                                                                 match_id,
                                                                 self.__api_key_container.get_api_key()))
