@@ -154,12 +154,16 @@ def main():
             )
             new_match.save()
 
-        # Wait 10 minutes at a time for match to finish
+        # Wait 5 minutes at a time, starting from 20 minutes, for match to finish
         game_has_been_on_minutes = 0
         if ongoing_match_dict['gameStartTime'] != 0:
             game_has_been_on_minutes = math.floor((time.time()*1000 - ongoing_match_dict['gameStartTime']) / 1000 / 60)
-        print("Game has been on for {} minutes".format(game_has_been_on_minutes))
-        print(ongoing_match_dict['gameId'])
+        print("Game has been on for {} minutes. ".format(game_has_been_on_minutes), end='')
+        if game_has_been_on_minutes < 20:
+            print("Wait for {} minutes to re-check if match done.".format(20-game_has_been_on_minutes))
+            time.sleep((20-game_has_been_on_minutes)*60)
+        else:
+            print("Check if match is done.")
         match_result = None
         match_finished = False
         while not match_finished:
