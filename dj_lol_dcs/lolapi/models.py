@@ -76,7 +76,7 @@ class SummonerTierHistory(models.Model):
     )
     at_time = models.DateTimeField(auto_now_add=True)
     tier = models.CharField(max_length=255)
-
+    tiers_json = models.TextField()
 
 # Match history data
 
@@ -95,7 +95,7 @@ class HistoricalMatch(models.Model):
         null=True
     )
     regional_tier_avg = models.CharField(max_length=255, null=True)
-    regional_tier_meta = models.CharField(max_length=255, null=True)
+    regional_tier_meta = models.TextField(max_length=255, null=True)
     game_duration = models.IntegerField(null=True)
     match_result_json = models.TextField(null=True)
     match_timeline_json = models.TextField(null=True)
