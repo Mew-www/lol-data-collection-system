@@ -1,4 +1,6 @@
 class Tiers:
+    """Utility class to perform calculations (e.g. "get average") on tiers and ranks"""
+
     __tiers_enum = list(enumerate([
         "BRONZE V",   "BRONZE IV",   "BRONZE III",   "BRONZE II",   "BRONZE I",
         "SILVER V",   "SILVER IV",   "SILVER III",   "SILVER II",   "SILVER I",

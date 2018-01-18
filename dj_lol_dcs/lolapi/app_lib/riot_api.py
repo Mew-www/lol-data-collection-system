@@ -23,7 +23,7 @@ class RiotApi:
             timeframe_start = epoch_now - timeframe_size
             requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start,
                                                      self.__request_history))
-            print("[{}/{}, in {} second timeframe]".format(
+            print("[RATE-LIMIT][{}/{}, in {} second timeframe]".format(
                 len(requests_done_in_timeframe),
                 max_requests_in_timeframe,
                 timeframe_size))
