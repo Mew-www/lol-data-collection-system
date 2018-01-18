@@ -20,6 +20,7 @@ from lolapi.models import GameVersion, Champion, ChampionGameData, StaticGameDat
 from lolapi.models import Region, Summoner, SummonerTierHistory
 from lolapi.models import HistoricalMatch
 from lolapi.app_lib.enumerations import Tiers
+from lolapi.app_lib.postgres_requesthistory_checking import PostgresRequestHistory
 from django.core.exceptions import ObjectDoesNotExist
 
 
@@ -214,6 +215,12 @@ def main():
     # API init
     tiers = Tiers()
     api_hosts = RegionalRiotapiHosts()
+    requesthistory = PostgresRequestHistory("host={} dbname={} user={} password={}".format(
+        'localhost',
+        os.environ['DJ_PG_DBNAME'],
+        os.environ['DJ_PG_USERNAME'],
+        os.environ['DJ_PG_PASSWORD']
+    ))
     riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), api_hosts, r_endpoints)
 
     target_summoners = []
