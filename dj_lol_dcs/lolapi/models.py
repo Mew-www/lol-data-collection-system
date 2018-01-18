@@ -1,5 +1,21 @@
 from django.db import models
 
+
+# Rate limiting
+
+
+class RiotapiRequest(models.Model):
+    """A request made-or-to-be-made to Riot API, a lot of sorts to assist ratelimit tracking"""
+    at_time = models.DateTimeField(auto_now_add=True)
+    api_key = models.CharField(max_length=255)  # Redundant but more convenient to query, not big overhead
+    region = models.ForeignKey(
+        'Region',
+        on_delete=models.CASCADE,
+        null=True
+    )
+    method = models.CharField(max_length=255)
+
+
 # Static game data
 
 
