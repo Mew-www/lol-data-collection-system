@@ -23,6 +23,18 @@ from lolapi.app_lib.enumerations import Tiers
 from django.core.exceptions import ObjectDoesNotExist
 
 
+def get_existing_summoner_or_none(riotapi, region, summoner_name):
+    try:
+        api_summoner_dict = riotapi.get_summoner(region.name, summoner_name).json()
+    except RiotApiError as err:
+        if err.response.status_code == 404:
+            print("Summoner with name '{}' not found.".format(summoner_name))
+            return None
+        else:
+            raise RiotApiError(err.response)
+    return api_summoner_dict
+
+
 def get_ongoing_match_or_none(riotapi, region, summoner):
     try:
         ongoing_match_dict = riotapi.get_active_match(region.name, summoner.summoner_id).json()
@@ -204,22 +216,63 @@ def main():
     api_hosts = RegionalRiotapiHosts()
     riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), api_hosts, r_endpoints)
 
-    target_summoner = None
-    while not target_summoner:
+    target_summoners = []
+    while True:
+        # Do input loop if no existing target summoners (from automated loop or so)
+        if len(target_summoners) == 0:
+            start = False
+            while not start:
+                # Input loop (2 requests)
+                target_name = input("\nPlease input summoner on {} to definitely-not-stalk:\n".format(region_name))
+                while len(target_name) == 0:
+                    target_name = input("Input summoner on {} to definitely-not-stalk (✿◉‿◉)🗡:\n".format(region_name))
+                    if len(target_name) > 0:
+                        print("Thank you. (סּ‿סּ✿)")
+                region = get_or_create_region(region_name)
+                api_summoner_dict = get_existing_summoner_or_none(riotapi, region, target_name)
+                if api_summoner_dict:
+                    summoner = update_or_create_summoner(region, api_summoner_dict)
+                    target_summoners.append(summoner)
+                else:
+                    if len(target_summoners) == 0:
+                        print("Try another summoner.")
+                        continue
+                    else:
+                        print("Try another summoner, or start.")
+                print("Current targets: {}".format(', '.join(map(lambda s: s.latest_name, target_summoners))))
+                yesok = input("Type 'Yes'/'OK' to start; anything else will prompt for adding another summoner:\n")
+                if 'yes' in yesok.lower() or 'ok' in yesok.lower():
+                    start = True
 
-        # Input loop (2 requests)
-        target_summoner_name = input("\nPlease input summoner (from {}) who is in game:\n".format(region_name))
-        api_summoner_dict = riotapi.get_summoner(region_name, target_summoner_name).json()
-        region = get_or_create_region(region_name)
-        summoner = update_or_create_summoner(region, api_summoner_dict)
-        ongoing_match_dict = get_ongoing_match_or_none(riotapi, region, summoner)
-        if not ongoing_match_dict:
-            print("Try another summoner.")
+        ongoing_match = None  # Will be set to a _dict
+        attempt_count = 0
+        stalk_threshold = 5  # 6min times 5... is 30min of checking "is one of targets in game"
+        while not ongoing_match and attempt_count < stalk_threshold:
+            # If repeated attempt, wait a little (6 min? Typical time between matches for someone continuing soloQ-ing?)
+            if attempt_count > 0:
+                print('None of targets were in ongoing match, wait 6 minutes and re-check all.')
+                time.sleep(360)
+            attempt_count += 1
+            for target_summoner in target_summoners:
+                ongoing_match = get_ongoing_match_or_none(riotapi, region, target_summoner)
+                # If found, stop looping for more targets, we have what we need
+                if ongoing_match:
+                    print('Found out summoner {} is in an ongoing match.'.format(target_summoner.latest_name))
+                    break
+
+        # If we couldn't find a target in that 30min (6 times) of definitely-not-stalking, switch to manual input loop
+        if not ongoing_match:
+            print('None of current targets ({}) have entered a game in past 30 minutes.'.format(
+                ', '.join(map(lambda s: s.latest_name, target_summoners))
+            ))
+            print('Switching to the manual control, please specify targets in the following prompt.')
+            target_summoners = []
             continue
 
-        summoners = persist_ongoing_match_and_get_participant_summoners(riotapi, tiers, region, ongoing_match_dict)
-        for s in summoners:
-            print("{} #{})".format(s.latest_name, s.summoner_id))
+        # Else continue to the ongoing match
+        target_summoners = persist_ongoing_match_and_get_participant_summoners(riotapi, tiers, region, ongoing_match)
+        # Continue the 'while True' -loop with these new cute interesting target summoners (ʘ‿ʘ✿)
+        print("New targets: {}".format(', '.join(map(lambda s: s.latest_name, target_summoners))))
 
 
 if __name__ == "__main__":
