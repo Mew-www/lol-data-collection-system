@@ -1,3 +1,6 @@
+from .exceptions import ConfigurationError
+
+
 class RegionalRiotapiHosts:
     """Region <=references=> Platform <=references=> Host; Platforms are multiple for NA1/NA"""
     __hosts = {
@@ -21,7 +24,7 @@ class RegionalRiotapiHosts:
             matching_host = next(host for host, ref in self.__hosts.items() if (platform_name in ref['platforms']))
             return matching_host
         except StopIteration:
-            return None
+            raise ConfigurationError('Unconfigured platform_name in RegionalRiotapiHosts()') from None
 
     def get_host_by_region(self, region_name):
         """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
@@ -29,7 +32,7 @@ class RegionalRiotapiHosts:
             matching_host = next(host for host, ref in self.__hosts.items() if ref['region'] == region_name)
             return matching_host
         except StopIteration:
-            return None
+            raise ConfigurationError('Unconfigured region_name in RegionalRiotapiHosts()') from None
 
     def get_region_by_platform(self, platform_name):
         """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
@@ -37,4 +40,4 @@ class RegionalRiotapiHosts:
             region_name = next(ref['region'] for h, ref in self.__hosts.items() if (platform_name in ref['platforms']))
             return region_name
         except StopIteration:
-            return None
+            raise ConfigurationError('Unconfigured platform_name in RegionalRiotapiHosts()') from None
