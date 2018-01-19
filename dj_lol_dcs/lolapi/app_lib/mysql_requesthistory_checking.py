@@ -62,7 +62,7 @@ class MysqlRequestHistory:
             max_requests_in_timeframe = int(limit[0])
             timeframe_size            = int(limit[1])
             region                    = str(limit[2])
-            method                    = str(limit[3])
+            method                    = str(limit[3]) if limit[3] is not None else None
             timeframe_start = epoch_now - timeframe_size
             if method is None:
                 requests_done_in_timeframe = list(
