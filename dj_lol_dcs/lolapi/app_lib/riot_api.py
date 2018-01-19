@@ -4,33 +4,15 @@ from operator import itemgetter
 
 import requests
 import json
-import time
 
 
 class RiotApi:
 
-    def __init__(self, api_key_container, requesthistory, api_hosts, regional_endpoints):
+    def __init__(self, api_key_container, requesthistory_backend, api_hosts, regional_endpoints):
         self.__api_key_container = api_key_container
         self.__api_hosts = api_hosts
         self.__endpoints = regional_endpoints
-        self.__request_history = []
-        self.__db_request_history = requesthistory
-
-    def __check_app_rate_limits(self):
-        configured_limits = self.__api_key_container.get_app_rate_limits()
-        epoch_now = int(time.time())
-        for limit in configured_limits:
-            max_requests_in_timeframe, timeframe_size = limit
-            timeframe_start = epoch_now - timeframe_size
-            requests_done_in_timeframe = list(filter(lambda timestamp: timestamp >= timeframe_start,
-                                                     self.__request_history))
-            print("[RATE-LIMIT][{}/{}, in {} second timeframe]".format(
-                len(requests_done_in_timeframe),
-                max_requests_in_timeframe,
-                timeframe_size))
-            if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
-                return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]))
-        return True, None
+        self.__request_history_backend = requesthistory_backend
 
     def __validate_app_rate_limits(self, received_limits):
         configured_limits = self.__api_key_container.get_app_rate_limits()
@@ -60,16 +42,8 @@ class RiotApi:
                 raise RatelimitMismatchError(msg)
 
     def __get(self, url, api_key_container, region, method):
-        # Check rate-limit quotas, catches first full quota
-        ok, wait_seconds = self.__check_app_rate_limits()
-        while not ok:
-            time.sleep(wait_seconds)
-            # Re-check in case if multiple quotas full simultaneously
-            ok, wait_seconds = self.__check_app_rate_limits()
-
         # Update request history and do request
-        self.__request_history.append(int(time.time()))
-        self.__db_request_history.try_request(api_key_container, region, method, url)
+        self.__request_history_backend.permit_request(api_key_container, region, method, url)
         response = requests.get(url)
 
         # Check response status
