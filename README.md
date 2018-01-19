@@ -9,7 +9,7 @@ sudo apt-get install postgresql
 sudo apt-get install mysql-server
 
 # Configuring postgresqld (CHECK VERSION AFTER /etc/postgresql/, MAY VARY)
-sudo nano sudo nano /etc/postgresql/9.6/main/pg_hba.conf  
+sudo nano /etc/postgresql/9.6/main/pg_hba.conf
 -> change line "local all all peer" to "local all all password"  
 -> [CTRL]+X -> Y -> [ENTER] save  
 sudo -u postgres createuser --pwprompt --unencrypted dj_lol_dcs_user  
