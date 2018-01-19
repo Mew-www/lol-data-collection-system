@@ -27,7 +27,7 @@ sudo -u postgres createdb --encoding=UTF8 --owner=dj_lol_dcs_user dj_lol_dcs_db
 --> GRANT ALL PRIVILEGES ON <dbname>.* TO '<username>'@'localhost' IDENTIFIED BY '<password>';
 -> save 'MYSQL_REQUESTHISTORY_USERNAME' in environment variables (VARIES PER SYSTEM)
 -> save 'MYSQL_REQUESTHISTORY_PASSWORD' in environment variables (VARIES PER SYSTEM)
--> save 'MYSQL_REQUESTHISTORY_DBNAME' in environment variables (VARIES PER SYSTEM)
+-> save 'MYSQL_REQUESTHISTORY_DBNAME' in environment variables (VARIES PER SYSTEM)  
 
 # Configuring RIOT API
 -> save 'RIOT_API_KEY' in environment variables (VARIES PER SYSTEM) both django and scripts find it there
