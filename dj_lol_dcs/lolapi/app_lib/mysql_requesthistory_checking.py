@@ -1,4 +1,9 @@
 import MySQLdb as MDB
+from warnings import filterwarnings
+
+
+# Don't print warnings (i.e. "TABLE ALREADY EXISTS" at the beginning)
+filterwarnings('ignore', category=MDB.Warning)
 
 
 class MysqlRequestHistory:
