@@ -220,7 +220,7 @@ def main():
         os.environ['MYSQL_REQUESTHISTORY_PASSWORD'],
         os.environ['MYSQL_REQUESTHISTORY_DBNAME']
     )
-    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), api_hosts, r_endpoints)
+    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), requesthistory, api_hosts, r_endpoints)
 
     target_summoners = []
     while True:

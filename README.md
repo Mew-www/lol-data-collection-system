@@ -5,7 +5,8 @@ sudo pip install virtualenv
 
 # Backend persistence software
 sudo apt-get install memcached  
-sudo apt-get install postgresql  
+sudo apt-get install postgresql
+sudo apt-get install mysql-server
 
 # Configuring postgresqld (CHECK VERSION AFTER /etc/postgresql/, MAY VARY)
 sudo nano sudo nano /etc/postgresql/9.6/main/pg_hba.conf  
@@ -16,7 +17,17 @@ sudo -u postgres createuser --pwprompt --unencrypted dj_lol_dcs_user
 sudo -u postgres createdb --encoding=UTF8 --owner=dj_lol_dcs_user dj_lol_dcs_db  
 -> save 'DJ_PG_USERNAME' in environment variables (VARIES PER SYSTEM) django finds it there  
 -> save 'DJ_PG_PASSWORD' in environment variables (VARIES PER SYSTEM) django finds it there  
--> save 'DJ_PG_DBNAME' in environment variables (VARIES PER SYSTEM) django finds it there  
+-> save 'DJ_PG_DBNAME' in environment variables (VARIES PER SYSTEM) django finds it there
+
+# Configuring MySQL
+-> set root password on installation
+-> open prompt and create the database and user
+-> SQL:
+--> CREATE DATABASE <dbname>;
+--> GRANT ALL PRIVILEGES ON <dbname>.* TO '<username>'@'localhost' IDENTIFIED BY '<password>';
+-> save 'MYSQL_REQUESTHISTORY_USERNAME' in environment variables (VARIES PER SYSTEM)
+-> save 'MYSQL_REQUESTHISTORY_PASSWORD' in environment variables (VARIES PER SYSTEM)
+-> save 'MYSQL_REQUESTHISTORY_DBNAME' in environment variables (VARIES PER SYSTEM)
 
 # Configuring RIOT API
 -> save 'RIOT_API_KEY' in environment variables (VARIES PER SYSTEM) both django and scripts find it there
