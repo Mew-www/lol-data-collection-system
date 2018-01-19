@@ -6,11 +6,11 @@ import json
 import time
 import math
 
-import lolapi.app_lib.riotapi_endpoints as r_endpoints
+import lolapi.app_lib.riotapi_endpoints as riotapi_endpoints
 import lolapi.app_lib.datadragon_endpoints as d_endpoints
 from lolapi.app_lib.regional_riotapi_hosts import RegionalRiotapiHosts
 from lolapi.app_lib.riot_api import RiotApi
-from lolapi.app_lib.api_key_container import ApiKeyContainer
+from lolapi.app_lib.api_key_container import ApiKeyContainer, MethodRateLimits
 from lolapi.app_lib.exceptions import RiotApiError, ConfigurationError, RatelimitMismatchError
 
 import django
@@ -204,23 +204,59 @@ def get_or_create_game_version(match_result):
 
 
 def main():
-    # Arguments
+    # Arguments / configure
     if len(sys.argv) < 2:
         print('Usage: python active_data_gathering.py Region')
         sys.exit(1)
     region_name = sys.argv[1].upper()
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
+    method_rate_limits = {
+        '/lol/summoner/v3/summoners/by-name/{summonerName}': {
+            'EUW': [[2000, 60]],
+            'KR': [[2000, 60]],
+            'NA': [[2000, 60]],
+            'EUNE': [[1600, 60]],
+            'BR': [[1300, 60]],
+            'TR': [[1300, 60]],
+            'LAN': [[1000, 60]],
+            'LAS': [[1000, 60]],
+            'JP': [[800, 60]],
+            'OCE': [[800, 60]],
+            'RU': [[600, 60]]
+        },
+        'leagues-v3 endpoints': {
+            'EUW': [[300, 60]],
+            'NA': [[270, 60]],
+            'EUNE': [[165, 60]],
+            'BR': [[90, 60]],
+            'KR': [[90, 60]],
+            'LAN': [[80, 60]],
+            'LAS': [[80, 60]],
+            'TR': [[60, 60]],
+            'OCE': [[55, 60]],
+            'JP': [[35, 60]],
+            'RU': [[35, 60]]
+        },
+        '/lol/match/v3/matchlists/by-account/{accountId}': [[1000, 10]],
+        '/lol/match/v3/[matches,timelines]': [[500, 10]],
+        'All other endpoints': [[20000, 10]]
+    }
 
     # API init
     tiers = Tiers()
-    api_hosts = RegionalRiotapiHosts()
-    requesthistory = MysqlRequestHistory(
-        os.environ['MYSQL_REQUESTHISTORY_USERNAME'],
-        os.environ['MYSQL_REQUESTHISTORY_PASSWORD'],
-        os.environ['MYSQL_REQUESTHISTORY_DBNAME']
-    )
-    riotapi = RiotApi(ApiKeyContainer(api_key, app_rate_limits), requesthistory, api_hosts, r_endpoints)
+    riotapi = RiotApi(
+        ApiKeyContainer(
+            api_key,
+            app_rate_limits,
+            MethodRateLimits(method_rate_limits)),
+        MysqlRequestHistory(
+            os.environ['MYSQL_REQUESTHISTORY_USERNAME'],
+            os.environ['MYSQL_REQUESTHISTORY_PASSWORD'],
+            os.environ['MYSQL_REQUESTHISTORY_DBNAME']
+        ),
+        RegionalRiotapiHosts(),
+        riotapi_endpoints)
 
     target_summoners = []
     while True:

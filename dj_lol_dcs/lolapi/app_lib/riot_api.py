@@ -59,7 +59,7 @@ class RiotApi:
                     json.dumps(received_limits))
                 raise RatelimitMismatchError(msg)
 
-    def __get(self, url, api_key, region, method):
+    def __get(self, url, api_key_container, region, method):
         # Check rate-limit quotas, catches first full quota
         ok, wait_seconds = self.__check_app_rate_limits()
         while not ok:
@@ -69,7 +69,7 @@ class RiotApi:
 
         # Update request history and do request
         self.__request_history.append(int(time.time()))
-        self.__db_request_history.try_request(api_key, region, method, url)
+        self.__db_request_history.try_request(api_key_container, region, method, url)
         response = requests.get(url)
 
         # Check response status
@@ -86,7 +86,7 @@ class RiotApi:
         return self.__get(self.__endpoints.SUMMONER_BY_NAME(self.__api_hosts.get_host_by_region(region_name),
                                                             name,
                                                             self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           region_name,
                           '/lol/summoner/v3/summoners/by-name/{summonerName}')
 
@@ -94,7 +94,7 @@ class RiotApi:
         return self.__get(self.__endpoints.TIERS_BY_SUMMONER_ID(self.__api_hosts.get_host_by_region(region_name),
                                                                 summoner_id,
                                                                 self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           region_name,
                           'leagues-v3 endpoints')
 
@@ -102,7 +102,7 @@ class RiotApi:
         return self.__get(self.__endpoints.SPECTATOR_BY_SUMMONER_ID(self.__api_hosts.get_host_by_region(region_name),
                                                                     summoner_id,
                                                                     self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           region_name,
                           'All other endpoints')
 
@@ -110,7 +110,7 @@ class RiotApi:
         return self.__get(self.__endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region_name),
                                                                    account_id,
                                                                    self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           region_name,
                           '/lol/match/v3/matchlists/by-account/{accountId}')
 
@@ -118,7 +118,7 @@ class RiotApi:
         return self.__get(self.__endpoints.MATCH_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform_name),
                                                              match_id,
                                                              self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           self.__api_hosts.get_region_by_platform(platform_name),
                           '/lol/match/v3/[matches,timelines]')
 
@@ -126,6 +126,6 @@ class RiotApi:
         return self.__get(self.__endpoints.TIMELINE_BY_MATCH_ID(self.__api_hosts.get_host_by_platform(platform_name),
                                                                 match_id,
                                                                 self.__api_key_container.get_api_key()),
-                          self.__api_key_container.get_api_key(),
+                          self.__api_key_container,
                           self.__api_hosts.get_region_by_platform(platform_name),
                           '/lol/match/v3/[matches,timelines]')

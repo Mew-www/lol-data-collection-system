@@ -52,7 +52,12 @@ class MysqlRequestHistory:
         self.cursor.execute("UNLOCK TABLES")
         self.dbh.commit()
 
-    def try_request(self, api_key, region, method, request_uri):
+    def try_request(self, api_key_container, region, method, request_uri):
+        api_key = api_key_container.get_api_key()
+        app_rate_limits = api_key_container.get_app_rate_limits()
+        request_specific_method_rate_limits = api_key_container.get_method_rate_limits().get_rate_limit(method, region)
+        import json
+        print("method rate limits {} => {}: {}".format(method, region, json.dumps(request_specific_method_rate_limits)))
         self.__lock()
         self.__add_request_to_db(api_key, region, method, request_uri)
         self.__unlock()
