@@ -1,11 +1,13 @@
 # Setting up python with virtualenv in target system
 sudo apt-get install python3  
+sudo apt-get install python3-dev  
 sudo apt-get install pip  
 sudo pip install virtualenv  
 
 # Backend persistence software
 sudo apt-get install memcached  
-sudo apt-get install postgresql
+sudo apt-get install postgresql  
+sudo apt-get install libmariadbclient-dev  
 sudo apt-get install mysql-server
 
 # Configuring postgresqld (CHECK VERSION AFTER /etc/postgresql/, MAY VARY)
@@ -20,13 +22,13 @@ sudo -u postgres createdb --encoding=UTF8 --owner=dj_lol_dcs_user dj_lol_dcs_db
 -> save 'DJ_PG_DBNAME' in environment variables (VARIES PER SYSTEM) django finds it there
 
 # Configuring MySQL
--> set root password on installation
--> open prompt and create the database and user
--> SQL:
---> CREATE DATABASE <dbname>;
---> GRANT ALL PRIVILEGES ON <dbname>.* TO '<username>'@'localhost' IDENTIFIED BY '<password>';
--> save 'MYSQL_REQUESTHISTORY_USERNAME' in environment variables (VARIES PER SYSTEM)
--> save 'MYSQL_REQUESTHISTORY_PASSWORD' in environment variables (VARIES PER SYSTEM)
+-> set root password on installation  
+-> open prompt and create the database and user  
+-> SQL:  
+--> CREATE DATABASE <dbname>;  
+--> GRANT ALL PRIVILEGES ON <dbname>.* TO '<username>'@'localhost' IDENTIFIED BY '<password>';  
+-> save 'MYSQL_REQUESTHISTORY_USERNAME' in environment variables (VARIES PER SYSTEM)  
+-> save 'MYSQL_REQUESTHISTORY_PASSWORD' in environment variables (VARIES PER SYSTEM)  
 -> save 'MYSQL_REQUESTHISTORY_DBNAME' in environment variables (VARIES PER SYSTEM)
 
 # Configuring RIOT API
