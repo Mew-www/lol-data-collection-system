@@ -62,6 +62,7 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     # Get tiers of the participants and average match tier (10+10 requests)
     teams_tiers = {}
     participant_summoners = []
+    # Gather all tiers in a dict {team_key: [tier_and_misc, ..], ..}
     for p in ongoing_match_dict['participants']:
         api_p_summoner_dict = riotapi.get_summoner(region.name, p['summonerName']).json()
         participant_summoner = update_or_create_summoner(region, api_p_summoner_dict)
@@ -71,11 +72,14 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
         if p['teamId'] not in teams_tiers:
             teams_tiers[p['teamId']] = []
         teams_tiers[p['teamId']].append({'champion_id': p['championId'], 'tier': participant_tier_milestone.tier})
+    # Calculate avg tier per team
     teams_avg_tiers = []
     for team_id, team in teams_tiers.items():
         teams_avg_tiers.append(known_tiers.get_average(map(lambda x: x['tier'], team)))
+    # Calculate total match avg tier
     match_avg_tier = known_tiers.get_average(teams_avg_tiers)
-    print(json.dumps(teams_tiers))
+    for team_key in teams_tiers:
+        print("Tiers of team {}: {}".format(team_key, ', '.join(map(lambda t: t['tier'], teams_tiers[team_key]))))
     print("Average tier for match is: {}".format(match_avg_tier))
 
     # Save preliminary match data since avg_tier and meta_tier aren't obtainable post-game
@@ -192,7 +196,7 @@ def get_or_create_game_version(match_result):
         known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
         new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
         for version_id in new_game_version_ids:
-            print('Saving new game version {}'.format(version_id))
+            print("Saving new game version {}".format(version_id))
             new_ver = GameVersion(semver=version_id)
             new_ver.save()
         matching_known_version = next(
@@ -206,7 +210,7 @@ def get_or_create_game_version(match_result):
 def main():
     # Arguments / configure
     if len(sys.argv) < 2:
-        print('Usage: python active_data_gathering.py Region OptionalRatelimitLogfile')
+        print("Usage: python active_data_gathering.py Region OptionalRatelimitLogfile")
         sys.exit(1)
     region_name = sys.argv[1].upper()
     ratelimit_logfile_location = './{}'.format(sys.argv[2].lower()) if len(sys.argv) > 2 else None
@@ -294,22 +298,22 @@ def main():
         while not ongoing_match and attempt_count < stalk_threshold:
             # If repeated attempt, wait a little (6 min? Typical time between matches for someone continuing soloQ-ing?)
             if attempt_count > 0:
-                print('None of targets were in ongoing match, wait 6 minutes and re-check all.')
+                print("None of targets were in ongoing match, wait 6 minutes and re-check all.")
                 time.sleep(360)
             attempt_count += 1
             for target_summoner in target_summoners:
                 ongoing_match = get_ongoing_match_or_none(riotapi, region, target_summoner)
                 # If found, stop looping for more targets, we have what we need
                 if ongoing_match:
-                    print('Found out summoner {} is in an ongoing match.'.format(target_summoner.latest_name))
+                    print("Found out summoner {} is in an ongoing match.".format(target_summoner.latest_name))
                     break
 
         # If we couldn't find a target in that 30min (6 times) of definitely-not-stalking, switch to manual input loop
         if not ongoing_match:
-            print('None of current targets ({}) have entered a game in past 30 minutes.'.format(
+            print("None of current targets ({}) have entered a game in past 30 minutes.".format(
                 ', '.join(map(lambda s: s.latest_name, target_summoners))
             ))
-            print('Switching to the manual control, please specify targets in the following prompt.')
+            print("Switching to the manual control, please specify targets in the following prompt.")
             target_summoners = []
             continue
 
