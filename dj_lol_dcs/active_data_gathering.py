@@ -40,7 +40,7 @@ def get_existing_summoner_or_none(riotapi, region, summoner_name):
 def get_ongoing_match_or_none(riotapi, region, summoner):
     try:
         ongoing_match_dict = riotapi.get_active_match(region.name, summoner.summoner_id).json()
-        if ongoing_match_dict['gameQueueConfigId'] != 420:
+        if 'gameQueueConfigId' not in ongoing_match_dict or ongoing_match_dict['gameQueueConfigId'] != 420:
             print("Summoner '{}' is in different game/queue mode.".format(summoner.latest_name))
             return None
     except RiotApiError as err:
@@ -65,10 +65,14 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     participant_summoners = []
     # Gather all tiers in a dict {team_key: [tier_and_misc, ..], ..}
     for p in ongoing_match_dict['participants']:
-        api_p_summoner_dict = riotapi.get_summoner(region.name, p['summonerName']).json()
+        api_p_summoner_dict = request_and_return_summoner(region.name, p['summonerName'], riotapi, retries=2)
         participant_summoner = update_or_create_summoner(region, api_p_summoner_dict)
         participant_summoners.append(participant_summoner)
-        api_tiers_list = riotapi.get_tiers(region.name, participant_summoner.summoner_id).json()
+        api_tiers_list = request_and_return_summoner_tiers(
+            region.name,
+            participant_summoner.summoner_id,
+            riotapi,
+            retries=2)
         participant_tier_milestone = update_summoner_tier_history(participant_summoner, api_tiers_list)
         if p['teamId'] not in teams_tiers:
             teams_tiers[p['teamId']] = []
@@ -109,22 +113,13 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
         time.sleep((20 - game_has_been_on_minutes) * 60)
     else:
         print("Check if match is done.")
-    match_result = None
-    match_finished = False
-    while not match_finished:
-        try:
-            match_result = riotapi.get_match_result(ongoing_match_dict['platformId'], ongoing_match_dict['gameId'])
-            match_finished = True
-        except RiotApiError as err:
-            if err.response.status_code == 404:
-                print("Match {} is still going on ({} minutes). Wait another 5 minutes".format(
-                    ongoing_match_dict['gameId'],
-                    math.floor((time.time() * 1000 - ongoing_match_dict['gameStartTime']) / 1000 / 60)
-                ))
-                # Wait another 5 minutes
-                time.sleep(300)
-            else:
-                raise RiotApiError(err.response)
+
+    match_result = request_and_return_match_results(
+        ongoing_match_dict['gameId'],
+        ongoing_match_dict['gameStartTime'],
+        riotapi,
+        ongoing_match_dict['platformId'],
+        non_404_retries=2)
 
     # Update match data with result and timeline (1 request, for timeline)
     try:
@@ -133,16 +128,179 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
         print("Match {} wasn't saved while it was ongoing, why is this?".format(ongoing_match_dict['gameId']))
         raise ObjectDoesNotExist()
     result_dict = match_result.json()
-    timeline_dict = riotapi.get_match_timeline(result_dict['platformId'], result_dict['gameId']).json()
     match.game_version = get_or_create_game_version(result_dict)
     match.game_duration = result_dict['gameDuration']
     match.match_result_json = json.dumps(result_dict)
-    match.match_timeline_json = json.dumps(timeline_dict)
+    request_and_link_timeline_to_match(match, riotapi, result_dict['platformId'], retries=2)
     match.save()
     print("Saved match {} successfully in two phases (pre for avg_tier, post for result/timeline)".format(
         result_dict['gameId']
     ))
     return participant_summoners
+
+
+def request_and_return_summoner(region_name, summoner_name, riotapi, retries=0):
+    """
+        If loading summoner fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - else retry up to N times
+        - if still no, we cannot really continue (not having the summoner data) so re-raise the RiotApiError
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + retries
+    while error_retries_done < tries_permitted:
+        try:
+            api_p_summoner_dict = riotapi.get_summoner(region_name, summoner_name).json()
+            return api_p_summoner_dict
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] != 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            else:
+                print("Failed to load summoner data for {} ({}) (HTTP Error {}) - retry in 1,2,..".format(
+                    summoner_name,
+                    region_name,
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+                if error_retries_done == tries_permitted:
+                    print("Retried the maximum {} times to load summoner data for {} ({}).".format(
+                        retries,
+                        summoner_name,
+                        region_name
+                    ))
+                    raise RiotApiError(err.response) from None
+
+
+def request_and_return_summoner_tiers(region_name, summoner_id, riotapi, retries=0):
+    """
+        If loading summoner tiers fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - else retry up to N times
+        - if still no, we cannot really continue (unable to calculate match's avg tier) so re-raise the RiotApiError
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + retries
+    while error_retries_done < tries_permitted:
+        try:
+            api_tiers_list = riotapi.get_tiers(region_name, summoner_id).json()
+            return api_tiers_list
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] != 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            else:
+                print("Failed to load summoner tiers for summoner id #{} ({}) (HTTP Error {}) - retry in 1,2,..".format(
+                    summoner_id,
+                    region_name,
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+                if error_retries_done == tries_permitted:
+                    print("Retried the maximum {} times to load summoner tiers for summoner id #{} ({}).".format(
+                        retries,
+                        summoner_id,
+                        region_name
+                    ))
+                    raise RiotApiError(err.response) from None
+
+
+def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
+    """
+        If loading timeline fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - else retry up to N times
+        - if still no, exit gracefully (leaving partial match data that can be filled later)
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + retries
+    while error_retries_done < tries_permitted:
+        try:
+            timeline_dict = riotapi.get_match_timeline(platform_id, match.match_id).json()
+            match.match_timeline_json = json.dumps(timeline_dict)
+            break
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] != 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            else:
+                print("Failed to load timeline for match {} (HTTP Error {}) - retry in 1,2,..".format(
+                    match.match_id,
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+    if error_retries_done == tries_permitted:
+        print("Retried maximum of {} times - Riot API still returning errors so skipping this timeline for now".format(
+            retries
+        ))
+
+
+def request_and_return_match_results(match_id, match_start_time, riotapi, platform_id, non_404_retries=0):
+    """
+        If loading results fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - else retry up to N times
+        - if still no, we cannot really continue (not knowing if match finished) so re-raise the RiotApiError
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + non_404_retries
+    while error_retries_done < tries_permitted:
+        try:
+            match_result = riotapi.get_match_result(platform_id, match_id)
+            return match_result
+        except RiotApiError as err:
+            if err.response.status_code == 404:
+                print("Match {} is still going on ({} minutes). Wait another 5 minutes".format(
+                    match_id,
+                    math.floor((time.time() * 1000 - match_start_time) / 1000 / 60)
+                ))
+                # Wait another 5 minutes
+                time.sleep(300)
+                continue  # This is permitted (and expected at least once) (404 error)
+            elif err.response.status_code == 429:
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] != 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(
+                        err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            else:
+                print("Failed to load results for match {} (HTTP Error {}) - retry in 1,2,..".format(
+                    match_id,
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+                if error_retries_done == tries_permitted:
+                    print("Retried the maximum {} times to load results for match {}.".format(
+                        non_404_retries,
+                        match_id
+                    ))
+                    raise RiotApiError(err.response) from None
 
 
 def get_or_create_region(region_name):
