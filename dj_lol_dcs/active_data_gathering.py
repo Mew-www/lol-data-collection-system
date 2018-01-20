@@ -472,6 +472,7 @@ def main():
         ongoing_match = None  # Will be set to a _dict
         attempt_count = 0
         stalk_threshold = 5  # 6min times 5... is 30min of checking "is one of targets in game"
+        summoner_with_match = None
         while not ongoing_match and attempt_count < stalk_threshold:
             # If repeated attempt, wait a little (6 min? Typical time between matches for someone continuing soloQ-ing?)
             if attempt_count > 0:
@@ -480,9 +481,10 @@ def main():
             attempt_count += 1
             for target_summoner in target_summoners:
                 ongoing_match = get_ongoing_match_or_none(riotapi, region, target_summoner)
-                # If found, stop looping for more targets, we have what we need
+                # If found, stop looping targets, we have what we need, also mark the summoner whose match it is
                 if ongoing_match:
                     print("Found out summoner {} is in an ongoing match.".format(target_summoner.latest_name))
+                    summoner_with_match = target_summoner
                     break
 
         # If we couldn't find a target in that 30min (6 times) of definitely-not-stalking, switch to manual input loop
@@ -495,9 +497,22 @@ def main():
             continue
 
         # Else continue to the ongoing match
-        target_summoners = persist_ongoing_match_and_get_participant_summoners(riotapi, tiers, region, ongoing_match)
-        # Continue the 'while True' -loop with these new cute interesting target summoners (ʘ‿ʘ✿)
-        print("New targets: {}".format(', '.join(map(lambda s: s.latest_name, target_summoners))))
+        try:
+            target_summoners = persist_ongoing_match_and_get_participant_summoners(riotapi, tiers, region, ongoing_match)
+            # Continue the 'while True' -loop with these new cute interesting target summoners (ʘ‿ʘ✿)
+            print("New targets: {}".format(', '.join(map(lambda s: s.latest_name, target_summoners))))
+        except RiotApiError as err:
+            # if it is application or method rate limit error, something badly wrong in our rate limiting
+            if err.response.status_code == 429 and err.response.headers['X-Rate-Limit-Type'] != 'service':
+                print("Quitting 'cause Riot said ({}) rate limit full. (◕‸ ◕✿)".format(
+                    err.response.headers['X-Rate-Limit-Type']
+                ))
+                sys.exit(1)
+            # else it is another error the subroutine couldn't handle, so find another.. target (✿◉‿◉)
+            else:
+                # not the one whose match caused an error, though (◕__◕✿)
+                target_summoners = list(filter(lambda s: s.summoner_id != summoner_with_match.summoner_id,
+                                               target_summoners))
 
 
 if __name__ == "__main__":
