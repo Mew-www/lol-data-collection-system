@@ -209,7 +209,7 @@ def main():
         print('Usage: python active_data_gathering.py Region OptionalRatelimitLogfile')
         sys.exit(1)
     region_name = sys.argv[1].upper()
-    ratelimit_logfile_location = sys.argv[2].lower() if len(sys.argv) > 2 else None
+    ratelimit_logfile_location = './{}'.format(sys.argv[2].lower()) if len(sys.argv) > 2 else None
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
     method_rate_limits = {
