@@ -22,6 +22,7 @@ from lolapi.models import HistoricalMatch
 from lolapi.app_lib.enumerations import Tiers
 from lolapi.app_lib.mysql_requesthistory_checking import MysqlRequestHistory
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import IntegrityError
 
 
 def get_existing_summoner_or_none(riotapi, region, summoner_name):
@@ -86,13 +87,17 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     try:
         HistoricalMatch.objects.get(match_id=ongoing_match_dict['gameId'], region=region)
     except ObjectDoesNotExist:
-        new_match = HistoricalMatch(
-            match_id=ongoing_match_dict['gameId'],
-            region=region,
-            regional_tier_avg=match_avg_tier,
-            regional_tier_meta=json.dumps(teams_tiers)
-        )
-        new_match.save()
+        try:
+            new_match = HistoricalMatch(
+                match_id=ongoing_match_dict['gameId'],
+                region=region,
+                regional_tier_avg=match_avg_tier,
+                regional_tier_meta=json.dumps(teams_tiers)
+            )
+            new_match.save()
+        except IntegrityError:
+            # If match was created by another process, keep going
+            pass
 
     # Wait 5 minutes at a time, starting from 20 minutes, for match to finish (1 request per check)
     game_has_been_on_minutes = 0
@@ -144,8 +149,12 @@ def get_or_create_region(region_name):
     try:
         matching_region = Region.objects.get(name=region_name)
     except ObjectDoesNotExist:
-        matching_region = Region(name=region_name)
-        matching_region.save()
+        try:
+            matching_region = Region(name=region_name)
+            matching_region.save()
+        except IntegrityError:
+            # If region was created by another process, fetch that one
+            matching_region = Region.objects.get(name=region_name)
     return matching_region
 
 
@@ -155,13 +164,19 @@ def update_or_create_summoner(region, api_summoner_dict):
         matching_summoner.latest_name = api_summoner_dict['name']
         matching_summoner.save()
     except ObjectDoesNotExist:
-        matching_summoner = Summoner(
-            region=region,
-            account_id=api_summoner_dict['accountId'],
-            summoner_id=api_summoner_dict['id'],
-            latest_name=api_summoner_dict['name']
-        )
-        matching_summoner.save()
+        try:
+            matching_summoner = Summoner(
+                region=region,
+                account_id=api_summoner_dict['accountId'],
+                summoner_id=api_summoner_dict['id'],
+                latest_name=api_summoner_dict['name']
+            )
+            matching_summoner.save()
+        except IntegrityError:
+            # If summoner was created by another process, update that one (although it may be exactly same)
+            matching_summoner = Summoner.objects.get(region=region, account_id=api_summoner_dict['accountId'])
+            matching_summoner.latest_name = api_summoner_dict['name']
+            matching_summoner.save()
     return matching_summoner
 
 
@@ -197,8 +212,12 @@ def get_or_create_game_version(match_result):
         new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
         for version_id in new_game_version_ids:
             print("Saving new game version {}".format(version_id))
-            new_ver = GameVersion(semver=version_id)
-            new_ver.save()
+            try:
+                new_ver = GameVersion(semver=version_id)
+                new_ver.save()
+            except IntegrityError:
+                # If another process created the version, keep going
+                pass
         matching_known_version = next(
             filter(lambda gv: '.'.join(gv.semver.split('.')[0:2]) == match_version_id,
                    known_game_versions),
