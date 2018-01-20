@@ -37,19 +37,47 @@ def get_existing_summoner_or_none(riotapi, region, summoner_name):
     return api_summoner_dict
 
 
-def get_ongoing_match_or_none(riotapi, region, summoner):
-    try:
-        ongoing_match_dict = riotapi.get_active_match(region.name, summoner.summoner_id).json()
-        if 'gameQueueConfigId' not in ongoing_match_dict or ongoing_match_dict['gameQueueConfigId'] != 420:
-            print("Summoner '{}' is in different game/queue mode.".format(summoner.latest_name))
-            return None
-    except RiotApiError as err:
-        if err.response.status_code == 404:
-            print("Summoner '{}' is not in active match.".format(summoner.latest_name))
-            return None
-        else:
-            raise RiotApiError(err.response)
-    return ongoing_match_dict
+def request_and_return_ongoing_match_or_none(riotapi, region, summoner, non_404_retries=0):
+    """
+        If loading ongoing match fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - if http status code 404, return None
+        - else retry up to N times
+        - if still no, exit gracefully (re-trying sometime later in next iteration) returning None
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + non_404_retries
+    while error_retries_done < tries_permitted:
+        try:
+            ongoing_match_dict = riotapi.get_active_match(region.name, summoner.summoner_id).json()
+            if 'gameQueueConfigId' not in ongoing_match_dict or ongoing_match_dict['gameQueueConfigId'] != 420:
+                print("Summoner '{}' is in different game/queue mode.".format(summoner.latest_name))
+                return None
+            return ongoing_match_dict
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] == 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            elif err.response.status_code == 404:
+                print("Summoner '{}' is not in active match.".format(summoner.latest_name))
+                return None
+            else:
+                print("Failed to load ongoing match data for summoner '{}' (HTTP Error {}) - retry in 1,2,..".format(
+                    summoner.latest_name,
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+    if error_retries_done == tries_permitted:
+        print("Retried maximum of {} times - Riot API still returning errors so skipping this summoner for now".format(
+            non_404_retries
+        ))
 
 
 def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, region, ongoing_match_dict):
@@ -480,7 +508,7 @@ def main():
                 time.sleep(360)
             attempt_count += 1
             for target_summoner in target_summoners:
-                ongoing_match = get_ongoing_match_or_none(riotapi, region, target_summoner)
+                ongoing_match = request_and_return_ongoing_match_or_none(riotapi, region, target_summoner)
                 # If found, stop looping targets, we have what we need, also mark the summoner whose match it is
                 if ongoing_match:
                     print("Found out summoner {} is in an ongoing match.".format(target_summoner.latest_name))
