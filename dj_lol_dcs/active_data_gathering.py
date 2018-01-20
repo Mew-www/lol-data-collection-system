@@ -206,9 +206,10 @@ def get_or_create_game_version(match_result):
 def main():
     # Arguments / configure
     if len(sys.argv) < 2:
-        print('Usage: python active_data_gathering.py Region')
+        print('Usage: python active_data_gathering.py Region OptionalRatelimitLogfile')
         sys.exit(1)
     region_name = sys.argv[1].upper()
+    ratelimit_logfile_location = sys.argv[2].lower() if len(sys.argv) > 2 else None
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
     method_rate_limits = {
@@ -253,7 +254,8 @@ def main():
         MysqlRequestHistory(
             os.environ['MYSQL_REQUESTHISTORY_USERNAME'],
             os.environ['MYSQL_REQUESTHISTORY_PASSWORD'],
-            os.environ['MYSQL_REQUESTHISTORY_DBNAME']
+            os.environ['MYSQL_REQUESTHISTORY_DBNAME'],
+            ratelimit_logfile_location
         ),
         RegionalRiotapiHosts(),
         riotapi_endpoints)

@@ -1,6 +1,8 @@
 import MySQLdb as MDB
 from warnings import filterwarnings
 import time
+import csv
+import os
 
 
 # Don't print warnings (i.e. "TABLE ALREADY EXISTS" at the beginning)
@@ -9,7 +11,9 @@ filterwarnings('ignore', category=MDB.Warning)
 
 class MysqlRequestHistory:
 
-    def __init__(self, user, passwd, db):
+    def __init__(self, user, passwd, db, logfile_location=None):
+        """Saves requests as-per rate limit groups (region+method combination) and prints or logs them (as csv)"""
+        self.logfile_location = logfile_location
         self.dbh = MDB.connect(
             host="localhost",
             user=user,
@@ -74,10 +78,23 @@ class MysqlRequestHistory:
                     filter(lambda r: r['time'] >= timeframe_start and r['region'] == region and r['method'] == method,
                            relevant_request_history)
                 )
-            print("[RATE-LIMIT][{}/{}, in {} second timeframe]".format(
-                len(requests_done_in_timeframe),
-                max_requests_in_timeframe,
-                timeframe_size))
+            if self.logfile_location is None:
+                print("[RATE-LIMIT][{}][{}][{}/{}, in {} second timeframe]".format(
+                    region,
+                    method,
+                    len(requests_done_in_timeframe),
+                    max_requests_in_timeframe,
+                    timeframe_size))
+            else:
+                os.makedirs(os.path.dirname(self.logfile_location), exist_ok=True)
+                with open(self.logfile_location, 'a', newline='') as fh:
+                    csv_writer = csv.writer(fh, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    csv_writer.writerow([time.time(),
+                                         region,
+                                         method,
+                                         timeframe_size,
+                                         len(requests_done_in_timeframe),
+                                         max_requests_in_timeframe])
             if len(requests_done_in_timeframe) >= max_requests_in_timeframe:
                 return False, (timeframe_size - (epoch_now - requests_done_in_timeframe[-1]['time']))
         return True, None
