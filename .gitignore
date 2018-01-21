@@ -13,3 +13,6 @@ db.sqlite3
 
 # Development env
 .idea/
+
+# Logs
+dj_lol_dcs/log/
