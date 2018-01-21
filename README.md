@@ -1,7 +1,7 @@
 # Setting up python with virtualenv in target system
 sudo apt-get install python3  
 sudo apt-get install python3-dev  
-sudo apt-get install python-tk  
+sudo apt-get install python3-tk  
 sudo apt-get install pip  
 sudo pip install virtualenv  
 
