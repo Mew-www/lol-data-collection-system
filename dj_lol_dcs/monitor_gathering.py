@@ -4,12 +4,10 @@ import csv
 import datetime
 import re
 import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import textwrap
-
-
-matplotlib.use("Agg")
 
 
 def main():
