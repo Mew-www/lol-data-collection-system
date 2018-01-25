@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import textwrap
 from io import BytesIO
+from django.core.cache import cache
 
 
 @require_http_methods(['GET'])
@@ -45,12 +46,18 @@ def ratelimit_endpoints(request):
 
 @require_http_methods(['GET'])
 def ratelimit_quota_graph(request, ratelimit_endpoint):
-    """Returns .png"""
+    """Returns .png, cached hourly"""
+
+    # Check if the graph is saved in hourly cache
+    buffered_image = cache.get(ratelimit_endpoint, None)
+    if buffered_image is not None:
+        return HttpResponse(buffered_image, content_type='image/png')
 
     def hash_ratelimit_type(a_str_with_whitespace_and_stuff):
         """Just normalize the few ratelimit types there are, using md5 hash. Hash <=> endpoint. Not about security."""
         return hashlib.md5(a_str_with_whitespace_and_stuff).hexdigest()
 
+    # Check if there are ratelimit logs at all currently
     if not os.path.exists(settings.RATELIMIT_LOG_PATH):
         return HttpResponseNotFound("No monitored target endpoints overall")
 
@@ -112,4 +119,6 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
     buffer = BytesIO()
     plt.savefig(buffer, format='png')
     plt.close()
+    # Cache it for an hour
+    cache.set(ratelimit_endpoint, buffer.getvalue(), 60*60)
     return HttpResponse(buffer.getvalue(), content_type='image/png')
