@@ -23,7 +23,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',  # ORM -plugin to manage generic relations, required by django.contrib.auth
     'django.contrib.sessions',      # Session models
     'django.contrib.staticfiles',   # python manage.py collectstatic, distributed static files per app, and STATIC_URL
-    'lolapi'
+    'lolapi',
+    'monitor'
 ]
 CACHES = {
     'default': {
