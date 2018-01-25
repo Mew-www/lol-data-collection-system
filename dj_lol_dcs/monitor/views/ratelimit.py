@@ -106,13 +106,13 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
     df = mdates.DateFormatter('%b %d')
     plt.stackplot(graph_data['x'], graph_data['y'], color='#ff1493')
     index_of_peak = graph_data['y'].index(max(graph_data['y']))
-    plt.title('\n'.join(textwrap.wrap(
-        "{}\n(peaked {}/{} on {})".format(
-            real_key,
-            graph_data['y'][index_of_peak],
-            graph_data['y_limit'],
-            '{0:%Y-%m-%d %H:%M:%S}'.format(graph_data['x'][index_of_peak])),
-        60)))
+    plt.title('\n'.join(
+        textwrap.wrap(real_key, 60)
+        + textwrap.wrap("(peaked {}/{} on {})".format(
+                graph_data['y'][index_of_peak],
+                graph_data['y_limit'],
+                '{0:%Y-%m-%d %H:%M:%S}'.format(graph_data['x'][index_of_peak])),
+            60)), loc='left')
     axes = plt.gca()
     axes.set_ylim([0, int(graph_data['y_limit'])])
     axes.xaxis.set_major_formatter(df)
