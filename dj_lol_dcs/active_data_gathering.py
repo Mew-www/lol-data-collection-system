@@ -420,7 +420,7 @@ def main():
     region_name = sys.argv[1].upper()
     ratelimit_logfile_location = './{}'.format(sys.argv[2].lower()) if len(sys.argv) > 2 else None
     api_key = os.environ['RIOT_API_KEY']
-    app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
+    app_rate_limits = json.loads(os.environ['RIOT_APP_RATE_LIMITS_JSON'])  # [[num-requests, within-seconds], ..]
     method_rate_limits = {
         '/lol/summoner/v3/summoners/by-name/{summonerName}': {
             'EUW': [[2000, 60]],
