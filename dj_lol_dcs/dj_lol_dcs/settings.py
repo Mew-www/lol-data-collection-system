@@ -13,7 +13,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = os.environ['DJ_SECRET_KEY']
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = ['*']  # Do not check Host header (for simplicity's sake, less secure - more available)
 TIME_ZONE = 'UTC'      # Default datetime handling in UTC+0
 USE_I18N = False       # Not using .po files for translating (translations embed per each sub-page)
@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'lolapi',
     'monitor'
 ]
+RATELIMIT_LOG_PATH = os.path.join(BASE_DIR, 'log')
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
