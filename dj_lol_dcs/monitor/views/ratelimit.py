@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import textwrap
+from io import BytesIO
 
 
 @require_http_methods(['GET'])
@@ -108,7 +109,7 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
     axes = plt.gca()
     axes.set_ylim([0, int(graph_data['y_limit'])])
     axes.xaxis.set_major_formatter(df)
-    res = HttpResponse(content_type='image/png')
-    plt.savefig(res)
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
     plt.close()
-    return res
+    return HttpResponse(buffer.getvalue(), content_type='image/png')
