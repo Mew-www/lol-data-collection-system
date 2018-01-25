@@ -107,11 +107,11 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
     plt.stackplot(graph_data['x'], graph_data['y'], color='#ff1493')
     index_of_peak = graph_data['y'].index(max(graph_data['y']))
     plt.title('\n'.join(textwrap.wrap(
-        "{} (peaked {}/{} on {})".format(
+        "{}\n(peaked {}/{} on {})".format(
             real_key,
             graph_data['y'][index_of_peak],
             graph_data['y_limit'],
-            graph_data['x'][index_of_peak]),
+            '{0:%Y-%m-%d %H:%M:%S}'.format(graph_data['x'][index_of_peak])),
         60)))
     axes = plt.gca()
     axes.set_ylim([0, int(graph_data['y_limit'])])
