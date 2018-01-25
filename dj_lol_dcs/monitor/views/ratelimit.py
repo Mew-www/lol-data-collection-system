@@ -7,6 +7,8 @@ from django.conf import settings
 import os
 import csv
 import datetime
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import textwrap
