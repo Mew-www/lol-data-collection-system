@@ -13,7 +13,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = os.environ['DJ_SECRET_KEY']
-DEBUG = True
+DEBUG = False
 ALLOWED_HOSTS = ['*']  # Do not check Host header (for simplicity's sake, less secure - more available)
 TIME_ZONE = 'UTC'      # Default datetime handling in UTC+0
 USE_I18N = False       # Not using .po files for translating (translations embed per each sub-page)
