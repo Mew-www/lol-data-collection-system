@@ -18,7 +18,7 @@ from django.core.cache import cache
 
 @require_http_methods(['GET'])
 def ratelimit_endpoints(request):
-    """Returns endpoint(hash)s to use as url"""
+    """Returns endpoint(hash)s to use as url. As JSON object {type_name1: endpoint_hash1, ..}."""
 
     def hash_ratelimit_type(a_str_with_whitespace_and_stuff):
         """Just normalize the few ratelimit types there are, using md5 hash. Hash <=> endpoint. Not about security."""
