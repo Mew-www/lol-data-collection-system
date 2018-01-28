@@ -56,6 +56,11 @@ def request_and_return_ongoing_match_or_none(riotapi, region, summoner, non_404_
             return ongoing_match_dict
         except RiotApiError as err:
             if err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
                 # if a service rate limit error, wait the time returned in header, and retry without counting it
                 if err.response.headers['X-Rate-Limit-Type'] == 'service':
                     time.sleep(int(err.response.headers['Retry-After']))
@@ -182,6 +187,11 @@ def request_and_return_summoner(region_name, summoner_name, riotapi, retries=0):
             return api_p_summoner_dict
         except RiotApiError as err:
             if err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
                 # if a service rate limit error, wait the time returned in header, and retry without counting it
                 if err.response.headers['X-Rate-Limit-Type'] == 'service':
                     time.sleep(int(err.response.headers['Retry-After']))
@@ -222,6 +232,11 @@ def request_and_return_summoner_tiers(region_name, summoner_id, riotapi, retries
             return api_tiers_list
         except RiotApiError as err:
             if err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
                 # if a service rate limit error, wait the time returned in header, and retry without counting it
                 if err.response.headers['X-Rate-Limit-Type'] == 'service':
                     time.sleep(int(err.response.headers['Retry-After']))
@@ -263,6 +278,11 @@ def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
             break
         except RiotApiError as err:
             if err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
                 # if a service rate limit error, wait the time returned in header, and retry without counting it
                 if err.response.headers['X-Rate-Limit-Type'] == 'service':
                     time.sleep(int(err.response.headers['Retry-After']))
@@ -307,6 +327,11 @@ def request_and_return_match_results(match_id, match_start_time, riotapi, platfo
                 time.sleep(300)
                 continue  # This is permitted (and expected at least once) (404 error)
             elif err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
                 # if a service rate limit error, wait the time returned in header, and retry without counting it
                 if err.response.headers['X-Rate-Limit-Type'] == 'service':
                     time.sleep(int(err.response.headers['Retry-After']))
@@ -531,7 +556,11 @@ def main():
             print("New targets: {}".format(', '.join(map(lambda s: s.latest_name, target_summoners))))
         except RiotApiError as err:
             # if it is application or method rate limit error, something badly wrong in our rate limiting
-            if err.response.status_code == 429 and err.response.headers['X-Rate-Limit-Type'] != 'service':
+            if (
+                err.response.status_code == 429
+                and 'X-Rate-Limit-Type' not in err.response.headers
+                and err.response.headers['X-Rate-Limit-Type'] != 'service'
+            ):
                 print("Quitting 'cause Riot said ({}) rate limit full. (◕‸ ◕✿)".format(
                     err.response.headers['X-Rate-Limit-Type']
                 ))
