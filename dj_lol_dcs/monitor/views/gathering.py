@@ -40,6 +40,8 @@ def gathered_data_summary(request):
         spanned_regions}
 
     return HttpResponse(json.dumps({
-        'matches_total': int(all_matches.count()),
-        'matches_per_region': matches_per_region,
+        'matches': {
+            'total': int(all_matches.count()),
+            'per_region': matches_per_region,
+        }
     }))
