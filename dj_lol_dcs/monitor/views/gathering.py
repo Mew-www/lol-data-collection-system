@@ -18,7 +18,7 @@ def gatherers_activity_timestamps(request):
     return HttpResponse(json.dumps({
         filename.split('.')[0]: os.path.getmtime(os.path.join(settings.RATELIMIT_LOG_PATH, filename)) for
         filename in
-        os.listdir(settings.RATELIMIT_LOG_PATH)}))
+        os.listdir(settings.RATELIMIT_LOG_PATH)}), content_type='application/json')
 
 
 @require_http_methods(['GET'])
@@ -63,4 +63,4 @@ def gathered_data_summary(request):
             'total': int(all_matches.count()),
             'per_region': matches_per_region,
         }
-    }))
+    }), content_type='application/json')

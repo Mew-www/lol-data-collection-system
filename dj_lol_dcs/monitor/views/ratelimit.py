@@ -25,7 +25,7 @@ def ratelimit_endpoints(request):
         return hashlib.md5(a_str_with_whitespace_and_stuff).hexdigest()
 
     if not os.path.exists(settings.RATELIMIT_LOG_PATH):
-        return HttpResponse(json.dumps({}))
+        return HttpResponse(json.dumps({}), content_type='application/json')
 
     # Find each method+region -key, that translates to an endpoint
     existing_ratelimit_keys = []
@@ -41,7 +41,7 @@ def ratelimit_endpoints(request):
 
     ratelimit_types_to_hash = {k: hash_ratelimit_type(k.encode('utf8')) for k in existing_ratelimit_keys}
 
-    return HttpResponse(json.dumps(ratelimit_types_to_hash))
+    return HttpResponse(json.dumps(ratelimit_types_to_hash), content_type='application/json')
 
 
 @require_http_methods(['GET'])
