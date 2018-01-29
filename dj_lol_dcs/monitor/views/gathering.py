@@ -5,6 +5,7 @@ from django.conf import settings
 import os
 import json
 from lolapi.models import HistoricalMatch
+from django.db.models import Count
 
 
 @require_http_methods(['GET'])
@@ -29,12 +30,30 @@ def gathered_data_summary(request):
     matches_per_region = {
         r: {
             'total': int(all_matches.filter(region__name=r).count()),
-            'master': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='MASTER').count()),
-            'diamond': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='DIAMOND').count()),
-            'platinum': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='PLATINUM').count()),
-            'gold': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='GOLD').count()),
-            'silver': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='SILVER').count()),
-            'bronze': int(all_matches.filter(region__name=r).filter(regional_tier_avg__contains='BRONZE').count())
+            'master': list(all_matches
+                           .filter(region__name=r)
+                           .filter(regional_tier_avg__contains='MASTER')
+                           .values('game_version__semver').annotate(total=Count('id'))),
+            'diamond': list(all_matches
+                            .filter(region__name=r)
+                            .filter(regional_tier_avg__contains='DIAMOND')
+                            .values('game_version__semver').annotate(total=Count('id'))),
+            'platinum': list(all_matches
+                             .filter(region__name=r)
+                             .filter(regional_tier_avg__contains='PLATINUM')
+                             .values('game_version__semver').annotate(total=Count('id'))),
+            'gold': list(all_matches
+                         .filter(region__name=r)
+                         .filter(regional_tier_avg__contains='GOLD')
+                         .values('game_version__semver').annotate(total=Count('id'))),
+            'silver': list(all_matches
+                           .filter(region__name=r)
+                           .filter(regional_tier_avg__contains='SILVER')
+                           .values('game_version__semver').annotate(total=Count('id'))),
+            'bronze': list(all_matches
+                           .filter(region__name=r)
+                           .filter(regional_tier_avg__contains='BRONZE')
+                           .values('game_version__semver').annotate(total=Count('id')))
         } for
         r in
         spanned_regions}
