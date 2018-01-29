@@ -29,7 +29,8 @@ def gathered_data_summary(request):
     spanned_regions = list(all_matches.values_list('region__name', flat=True).distinct())
     matches_per_region = {
         r: {
-            'total': int(all_matches.filter(region__name=r).count()),
+            'total': list(all_matches.filter(region__name=r)
+                          .values('game_version__semver').annotate(total=Count('id'))),
             'master': list(all_matches
                            .filter(region__name=r)
                            .filter(regional_tier_avg__contains='MASTER')
