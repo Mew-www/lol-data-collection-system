@@ -31,6 +31,10 @@ def gathered_data_summary(request):
         r: {
             'total': list(all_matches.filter(region__name=r)
                           .values('game_version__semver').annotate(total=Count('id'))),
+            'challenger': list(all_matches
+                               .filter(region__name=r)
+                               .filter(regional_tier_avg__contains='CHALLENGER')
+                               .values('game_version__semver').annotate(total=Count('id'))),
             'master': list(all_matches
                            .filter(region__name=r)
                            .filter(regional_tier_avg__contains='MASTER')
