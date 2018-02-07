@@ -21,3 +21,10 @@ class ConfigurationError(Exception):
 class RatelimitMismatchError(ConfigurationError):
     """Raise when validating ratelimit (configured <=> api_response.headers) fails."""
     pass
+
+
+# Miscellaneous exceptions
+##
+class MatchTakenError(Exception):
+    """Raise when "match already being observed for gathering purposes by another process"""
+    pass
