@@ -11,7 +11,7 @@ import lolapi.app_lib.datadragon_endpoints as d_endpoints
 from lolapi.app_lib.regional_riotapi_hosts import RegionalRiotapiHosts
 from lolapi.app_lib.riot_api import RiotApi
 from lolapi.app_lib.api_key_container import ApiKeyContainer, MethodRateLimits
-from lolapi.app_lib.exceptions import RiotApiError, ConfigurationError, RatelimitMismatchError
+from lolapi.app_lib.exceptions import RiotApiError, ConfigurationError, RatelimitMismatchError, MatchTakenError
 
 import django
 os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
@@ -92,6 +92,15 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
         # Wait 5 minutes at a time, starting from 20 minutes, for match to finish (1 request per check)
         # Return participant summoners
     """
+
+    # Check if match is already being observed, if so then early return. (If happens parallel, let it be.)
+    try:
+        HistoricalMatch.objects.get(match_id=ongoing_match_dict['gameId'], region=region)
+        # Unacceptable, early return
+        raise MatchTakenError()
+    except ObjectDoesNotExist:
+        # Acceptable
+        pass
 
     # Get tiers of the participants and average match tier (10+10 requests)
     teams_tiers = {}
@@ -570,6 +579,11 @@ def main():
                 # not the one whose match caused an error, though (◕__◕✿)
                 target_summoners = list(filter(lambda s: s.summoner_id != summoner_with_match.summoner_id,
                                                target_summoners))
+        except MatchTakenError:
+            # That target was taken, so find another
+            print('Match #{} taken already by another process. ;_; Searching new one..'.format(ongoing_match['gameId']))
+            target_summoners = list(filter(lambda s: s.summoner_id != summoner_with_match.summoner_id,
+                                           target_summoners))
 
 
 if __name__ == "__main__":
