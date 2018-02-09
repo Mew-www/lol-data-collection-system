@@ -135,6 +135,7 @@ def main():
                     ).json()
                     match_object.match_timeline_json = json.dumps(timeline_dict)
                     match_object.save()
+                    print('Recovered match#{} timeline'.format(match_object.match_id))
                     break
                 except RiotApiError as err:
                     if err.response.status_code == 429:
@@ -177,6 +178,7 @@ def main():
                     ).json()
                     match_object.match_result_json = json.dumps(result_dict)
                     match_object.save()
+                    print('Recovered match#{} result'.format(match_object.match_id))
                     break
                 except RiotApiError as err:
                     if err.response.status_code == 429:
@@ -220,6 +222,7 @@ def main():
             if matching_known_version:
                 match_object.game_version = matching_known_version
                 match_object.save()
+                print('Recovered match {}\'s game version'.format(match_object.match_id))
 
 
 if __name__ == "__main__":
