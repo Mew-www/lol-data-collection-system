@@ -89,7 +89,7 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python periodical_data_repair.py RatelimitLogfile")
         sys.exit(1)
-    ratelimit_logfile_location = './{}'.format(sys.argv[1].lower()) if len(sys.argv) > 2 else None
+    ratelimit_logfile_location = './{}'.format(sys.argv[1].lower())
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = json.loads(os.environ['RIOT_APP_RATE_LIMITS_JSON'])  # [[num-requests, within-seconds], ..]
     method_rate_limits = {
