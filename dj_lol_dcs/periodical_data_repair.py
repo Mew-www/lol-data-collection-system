@@ -121,7 +121,7 @@ def main():
 
         # Get respective match as Django ORM object
         match_object = HistoricalMatch.objects.get(match_id=getattr(row, 'match_id'),
-                                                   region=Region(name=getattr(row, 'region_name')))
+                                                   region=Region.objects.get(name=getattr(row, 'region_name')))
 
         # Fix if timeline is missing, standalone
         if getattr(row, 'timeline_missing'):
