@@ -70,7 +70,7 @@ def update_and_get_versions():
     known_game_versions = list(GameVersion.objects.all())
     fresh_game_versions = requests.get(d_endpoints.VERSIONS).json()
     # Compare known <=> fresh version_ids
-    known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
+    known_game_version_ids = list(map(lambda gv: gv.semver, known_game_versions))
     new_game_version_ids = [ver for ver in fresh_game_versions if ver not in known_game_version_ids]
     for version_id in new_game_version_ids:
         print("Saving new game version {}".format(version_id))

@@ -428,7 +428,7 @@ def get_or_create_game_version(match_result):
     # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
     if not matching_known_version:
         updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
-        known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
+        known_game_version_ids = list(map(lambda gv: gv.semver, known_game_versions))
         new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
         for version_id in new_game_version_ids:
             print("Saving new game version {}".format(version_id))
