@@ -41,3 +41,11 @@ class RegionalRiotapiHosts:
             return region_name
         except StopIteration:
             raise ConfigurationError('Unconfigured platform_name in RegionalRiotapiHosts()') from None
+
+    def get_platform_by_region(self, region_name):
+        """This could be one-liner (using next's default argument), but more explicit using StopIteration instead"""
+        try:
+            platform_name = next(ref['platforms'][0] for h, ref in self.__hosts.items() if ref['region'] == region_name)
+            return platform_name
+        except StopIteration:
+            raise ConfigurationError('Unconfigured region_name in RegionalRiotapiHosts()') from None
