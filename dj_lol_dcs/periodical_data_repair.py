@@ -222,7 +222,7 @@ def main():
             if matching_known_version:
                 match_object.game_version = matching_known_version
                 match_object.save()
-                print('Recovered match {}\'s game version'.format(match_object.match_id))
+                print('Recovered match#{}\'s semantic game version'.format(match_object.match_id))
 
 
 if __name__ == "__main__":
