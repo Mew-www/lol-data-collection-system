@@ -197,7 +197,7 @@ def main():
                                 err.response.headers['X-Rate-Limit-Type']))
                             raise RiotApiError(err.response) from None
                     else:
-                        print("Failed to load timeline for match {} (HTTP Error {}) - retry in 1,2,..".format(
+                        print("Failed to load result for match {} (HTTP Error {}) - retry in 1,2,..".format(
                             match_object.match_id,
                             err.response.status_code))
                         # One, two
