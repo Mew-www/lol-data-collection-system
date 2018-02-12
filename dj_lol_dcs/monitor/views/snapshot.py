@@ -41,7 +41,6 @@ def create_database_dump(request):
                                                   os.environ['DJ_PG_DBNAME']])
         child_process.expect('Password:')
         child_process.sendline(os.environ['DJ_PG_PASSWORD'])
-        child_process.wait()  # Wait for pg_dump process to finish; Blocking
     except PermissionError:
         return HttpResponseServerError('The tmp directory must be owned by the WSGI daemon\'s server')
     return HttpResponse('Dumping database')  # status=200
