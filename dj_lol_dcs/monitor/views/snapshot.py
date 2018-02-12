@@ -4,6 +4,7 @@ from django.conf import settings
 import pexpect
 import os
 import time
+import threading
 
 
 def create_database_dump(request):
@@ -30,17 +31,23 @@ def create_database_dump(request):
         if os.path.exists(tmp_file_location):
             return HttpResponse('File already exists', status=201)
 
-        # Dump database
-        child_process = pexpect.spawn('pg_dump', ['--username={}'.format(os.environ['DJ_PG_USERNAME']),
-                                                  '--host=localhost',
-                                                  '--password',
-                                                  '--clean',
-                                                  '--create',
-                                                  '--format=c',
-                                                  '--file={}'.format(tmp_file_location),
-                                                  os.environ['DJ_PG_DBNAME']])
-        child_process.expect('Password:')
-        child_process.sendline(os.environ['DJ_PG_PASSWORD'])
+        # Circumvent blocking by using threading
+        def dump_database():
+            """A blocking call"""
+            # Dump database
+            child_process = pexpect.spawn('pg_dump', ['--username={}'.format(os.environ['DJ_PG_USERNAME']),
+                                                      '--host=localhost',
+                                                      '--password',
+                                                      '--clean',
+                                                      '--create',
+                                                      '--format=c',
+                                                      '--file={}'.format(tmp_file_location),
+                                                      os.environ['DJ_PG_DBNAME']])
+            child_process.expect('Password:')
+            child_process.sendline(os.environ['DJ_PG_PASSWORD'])
+            child_process.wait()
+        threaded_dumping = threading.Thread(target=dump_database)
+        threaded_dumping.start()
     except PermissionError:
         return HttpResponseServerError('The tmp directory must be owned by the WSGI daemon\'s server')
     return HttpResponse('Dumping database')  # status=200
