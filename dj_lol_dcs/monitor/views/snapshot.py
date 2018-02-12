@@ -75,4 +75,4 @@ def retrieve_database_dump(request):
             return HttpResponseNotFound('Must dump database before retrieval (dumped database too long ago)')
     else:
         return HttpResponseNotFound('Must dump database before retrieval (none existing)')
-    return FileResponse(open(tmp_file_location, 'rb'), streaming_content='application/octet-stream')
+    return FileResponse(open(tmp_file_location, 'rb'))
