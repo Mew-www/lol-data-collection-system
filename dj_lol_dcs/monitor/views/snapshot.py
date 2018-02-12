@@ -10,6 +10,8 @@ def generate_database_dump(request):
 
     # Remove any existing database dumps older than 10min
     tmp_folder = os.path.join(settings.BASE_DIR, 'tmp')
+    if not os.path.exists(tmp_folder):
+        os.makedirs(tmp_folder)
     for filename in os.listdir(tmp_folder):
         last_modified = os.path.join(tmp_folder, filename)
         if last_modified < (time.time() - 60*10):
