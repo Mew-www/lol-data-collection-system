@@ -16,3 +16,6 @@ db.sqlite3
 
 # Logs
 dj_lol_dcs/log/
+
+# Temporary files
+dj_lol_dcs/tmp/
