@@ -14,5 +14,5 @@ urlpatterns = [
     re_path(r'^/gathering/data/summary$', gathered_data_summary),
     re_path(r'^/snapshot/create$', create_database_dump),
     re_path(r'^/snapshot/check_current_size$', check_database_dump_size),
-    re_path(r'^/snapshot/lol_dcs_db.sql.zip$', retrieve_database_dump)
+    re_path(r'^/snapshot/$', retrieve_database_dump)
 ]

@@ -75,4 +75,6 @@ def retrieve_database_dump(request):
             return HttpResponseNotFound('Must dump database before retrieval (dumped database too long ago)')
     else:
         return HttpResponseNotFound('Must dump database before retrieval (none existing)')
-    return FileResponse(open(tmp_file_location, 'rb'))
+    response = FileResponse(open(tmp_file_location, 'rb'), content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="{}"'.format(DATABASE_SNAPSHOT_FILENAME)
+    return response
