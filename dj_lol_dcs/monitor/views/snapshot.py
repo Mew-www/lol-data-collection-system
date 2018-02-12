@@ -7,6 +7,9 @@ import time
 import threading
 
 
+DATABASE_SNAPSHOT_FILENAME = 'lol_dcs_dump.sql.zip'
+
+
 def create_database_dump(request):
     """
         Returns HTTP status:
@@ -21,7 +24,7 @@ def create_database_dump(request):
         return HttpResponseServerError('A /tmp directory must be created, with ownership of the WSGI daemon\'s server')
     try:
         # Remove any existing database dump older than 15min
-        tmp_file_location = os.path.join(tmp_folder, 'dcs_dump.sql.zip')
+        tmp_file_location = os.path.join(tmp_folder, DATABASE_SNAPSHOT_FILENAME)
         if os.path.exists(tmp_file_location):
             last_modified = os.path.getmtime(tmp_file_location)
             if last_modified < (time.time() - 60*10):
@@ -53,8 +56,19 @@ def create_database_dump(request):
     return HttpResponse('Dumping database')  # status=200
 
 
+def check_database_dump_size(request):
+    tmp_file_location = os.path.join(settings.BASE_DIR, 'tmp', DATABASE_SNAPSHOT_FILENAME)
+    if os.path.exists(tmp_file_location):
+        last_modified = os.path.getmtime(tmp_file_location)
+        if last_modified < (time.time() - 60*10):
+            return HttpResponseNotFound('Must dump database before checking (dumped database too long ago)')
+    else:
+        return HttpResponseNotFound('Must dump database before checking (none existing)')
+    return HttpResponse(str(round(os.path.getsize(tmp_file_location)/(1024*1024))) + 'MB')
+
+
 def retrieve_database_dump(request):
-    tmp_file_location = os.path.join(settings.BASE_DIR, 'tmp', 'dcs_dump.sql.zip')
+    tmp_file_location = os.path.join(settings.BASE_DIR, 'tmp', DATABASE_SNAPSHOT_FILENAME)
     if os.path.exists(tmp_file_location):
         last_modified = os.path.getmtime(tmp_file_location)
         if last_modified < (time.time() - 60*10):
