@@ -87,7 +87,7 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
             csv_reader = csv.reader(fh, delimiter=',', quotechar='"')
             time_week_ago = int(time.time()) - (60*60*24*7)
             for row in csv_reader:
-                if int(row[0]) >= time_week_ago:
+                if int(float(row[0])) >= time_week_ago:
                     rate_limit_method_and_region = "{} {}".format((row[2] if row[2] != '' else "App ratelimit"), row[1])
                     rate_limit_timeframe = int(row[3])
                     key = "{} per {}s".format(rate_limit_method_and_region, rate_limit_timeframe)
