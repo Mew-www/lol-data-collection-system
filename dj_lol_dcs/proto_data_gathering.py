@@ -30,7 +30,7 @@ def main():
     region = sys.argv[1].upper()
     target_summoner_name = sys.argv[2]
     api_key = os.environ['RIOT_API_KEY']
-    app_rate_limits = [[20, 1], [100, 120]]  # [[num-requests, within-seconds], ..]
+    app_rate_limits = json.loads(os.environ['RIOT_APP_RATE_LIMITS_JSON'])  # [[num-requests, within-seconds], ..]
 
     # API init
     api_hosts = RegionalRiotapiHosts()
