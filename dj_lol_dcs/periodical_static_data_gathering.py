@@ -91,36 +91,39 @@ def main():
             print('Found no matching static data set, for version {}'.format(semver))
             # If any of the requests to DataDragon fails, don't save partial static data
             with transaction.atomic():
-                profile_icons = requests.get(d_endpoints.PROFILE_ICONS(semver)).json()
-                champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(semver)).json()
-                champion_gamedata_models = []
-                for key, c in champions_list['data'].items():
-                    print('Requesting {} data for version {}'.format(c['id'], semver))
-                    gamedata = requests.get(d_endpoints.CHAMPION(semver, c['id'])).json()
-                    try:
-                        Champion.objects.get(name=c['name'])
-                    except ObjectDoesNotExist:
-                        champion_model = Champion(name=c['name'])
-                        champion_model.save()
-                        champion_gamedata_model = ChampionGameData(
-                            game_version=ver,
-                            champion=champion_model,
-                            data_json=json.dumps(gamedata)
-                        )
-                        champion_gamedata_model.save()
-                        champion_gamedata_models.append(champion_gamedata_model)
-                items = requests.get(d_endpoints.ITEMS(semver)).json()
-                summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
-                runes = requests.get(d_endpoints.RUNES(semver)).json()
-                matching_static_data = StaticGameData(
-                    game_version=ver,
-                    profile_icons_data_json=json.dumps(profile_icons),
-                    items_data_json=json.dumps(items),
-                    summonerspells_data_json=json.dumps(summonerspells),
-                    runes_data_json=json.dumps(runes),
-                )
-                matching_static_data.save()
-                matching_static_data.champions_data.set(champion_gamedata_models)
+                try:
+                    profile_icons = requests.get(d_endpoints.PROFILE_ICONS(semver)).json()
+                    champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(semver)).json()
+                    champion_gamedata_models = []
+                    for key, c in champions_list['data'].items():
+                        print('Requesting {} data for version {}'.format(c['id'], semver))
+                        gamedata = requests.get(d_endpoints.CHAMPION(semver, c['id'])).json()
+                        try:
+                            Champion.objects.get(name=c['name'])
+                        except ObjectDoesNotExist:
+                            champion_model = Champion(name=c['name'])
+                            champion_model.save()
+                            champion_gamedata_model = ChampionGameData(
+                                game_version=ver,
+                                champion=champion_model,
+                                data_json=json.dumps(gamedata)
+                            )
+                            champion_gamedata_model.save()
+                            champion_gamedata_models.append(champion_gamedata_model)
+                    items = requests.get(d_endpoints.ITEMS(semver)).json()
+                    summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
+                    runes = requests.get(d_endpoints.RUNES(semver)).json()
+                    matching_static_data = StaticGameData(
+                        game_version=ver,
+                        profile_icons_data_json=json.dumps(profile_icons),
+                        items_data_json=json.dumps(items),
+                        summonerspells_data_json=json.dumps(summonerspells),
+                        runes_data_json=json.dumps(runes),
+                    )
+                    matching_static_data.save()
+                    matching_static_data.champions_data.set(champion_gamedata_models)
+                except ValueError:
+                    print('Data for {} was not available.'.format(semver))
 
         except RiotApiError as e:
             print(e)
