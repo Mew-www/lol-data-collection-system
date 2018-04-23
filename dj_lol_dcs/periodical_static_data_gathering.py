@@ -92,6 +92,9 @@ def main():
             # If any of the requests to DataDragon fails, don't save partial static data
             with transaction.atomic():
                 try:
+                    runes = requests.get(d_endpoints.RUNES(semver)).json()
+                    summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
+                    items = requests.get(d_endpoints.ITEMS(semver)).json()
                     profile_icons = requests.get(d_endpoints.PROFILE_ICONS(semver)).json()
                     champions_list = requests.get(d_endpoints.CHAMPIONS_LIST(semver)).json()
                     champion_gamedata_models = []
@@ -110,9 +113,6 @@ def main():
                             )
                             champion_gamedata_model.save()
                             champion_gamedata_models.append(champion_gamedata_model)
-                    items = requests.get(d_endpoints.ITEMS(semver)).json()
-                    summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
-                    runes = requests.get(d_endpoints.RUNES(semver)).json()
                     matching_static_data = StaticGameData(
                         game_version=ver,
                         profile_icons_data_json=json.dumps(profile_icons),
