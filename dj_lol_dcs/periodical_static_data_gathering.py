@@ -74,7 +74,7 @@ def main():
     known_game_versions = list(GameVersion.objects.all())
     updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
 
-    known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
+    known_game_version_ids = list(map(lambda gv: gv.semver, known_game_versions))
     new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
 
     for version_id in new_game_version_ids:
@@ -109,18 +109,18 @@ def main():
                         )
                         champion_gamedata_model.save()
                         champion_gamedata_models.append(champion_gamedata_model)
-                    items = requests.get(d_endpoints.ITEMS(semver)).json()
-                    summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
-                    runes = requests.get(d_endpoints.RUNES(semver)).json()
-                    matching_static_data = StaticGameData(
-                        game_version=ver,
-                        profile_icons_data_json=json.dumps(profile_icons),
-                        items_data_json=json.dumps(items),
-                        summonerspells_data_json=json.dumps(summonerspells),
-                        runes_data_json=json.dumps(runes),
-                    )
-                    matching_static_data.save()
-                    matching_static_data.champions_data.set(champion_gamedata_models)
+                items = requests.get(d_endpoints.ITEMS(semver)).json()
+                summonerspells = requests.get(d_endpoints.SUMMONERSPELLS(semver)).json()
+                runes = requests.get(d_endpoints.RUNES(semver)).json()
+                matching_static_data = StaticGameData(
+                    game_version=ver,
+                    profile_icons_data_json=json.dumps(profile_icons),
+                    items_data_json=json.dumps(items),
+                    summonerspells_data_json=json.dumps(summonerspells),
+                    runes_data_json=json.dumps(runes),
+                )
+                matching_static_data.save()
+                matching_static_data.champions_data.set(champion_gamedata_models)
 
         except RiotApiError as e:
             print(e)
