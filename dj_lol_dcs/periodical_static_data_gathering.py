@@ -83,6 +83,10 @@ def main():
         new_ver.save()
 
     for ver in list(GameVersion.objects.all()):
+        # Manually skip versions (pre-8 and lolpatch_) that use deprecated (incompatible) static data format
+        if not ver.semver.split('.')[0].isdigit() or int(ver.semver.split('.')[0]) < 8:
+            continue
+
         try:
             # Try to query (if it'd exist)
             StaticGameData.objects.get(game_version=ver)
