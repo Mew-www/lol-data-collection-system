@@ -14,6 +14,7 @@ import matplotlib.dates as mdates
 import textwrap
 from io import BytesIO
 from django.core.cache import cache
+import time
 
 
 @require_http_methods(['GET'])
@@ -79,17 +80,19 @@ def ratelimit_quota_graph(request, ratelimit_endpoint):
         return HttpResponseNotFound("No such monitored target endpoint {}".format(ratelimit_endpoint))
     real_key = next(filter(lambda k: ratelimit_types_to_hash[k] == ratelimit_endpoint, ratelimit_types_to_hash.keys()))
 
-    # Save those lines, for each ratelimit log file
+    # Save those lines, for each ratelimit log file, from maximum of a week ago
     meaningful_lines = []
     for f in os.listdir(settings.RATELIMIT_LOG_PATH):
         with open(os.path.join(settings.RATELIMIT_LOG_PATH, f), 'r') as fh:
             csv_reader = csv.reader(fh, delimiter=',', quotechar='"')
+            time_week_ago = int(time.time()) - (60*60*24*7)
             for row in csv_reader:
-                rate_limit_method_and_region = "{} {}".format((row[2] if row[2] != '' else "App ratelimit"), row[1])
-                rate_limit_timeframe = int(row[3])
-                key = "{} per {}s".format(rate_limit_method_and_region, rate_limit_timeframe)
-                if real_key == key:
-                    meaningful_lines.append(row)
+                if int(float(row[0])) >= time_week_ago:
+                    rate_limit_method_and_region = "{} {}".format((row[2] if row[2] != '' else "App ratelimit"), row[1])
+                    rate_limit_timeframe = int(row[3])
+                    key = "{} per {}s".format(rate_limit_method_and_region, rate_limit_timeframe)
+                    if real_key == key:
+                        meaningful_lines.append(row)
 
     # Sort log lines per timestamp
     meaningful_lines.sort(key=lambda l: float(l[0]))
