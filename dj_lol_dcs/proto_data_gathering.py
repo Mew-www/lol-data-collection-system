@@ -20,6 +20,7 @@ from lolapi.models import Region, Summoner
 from lolapi.models import HistoricalMatch
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db import IntegrityError
 
 
 def main():
@@ -127,13 +128,16 @@ def main():
                 # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
                 if not matching_known_version:
                     updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
-                    known_game_version_ids = map(lambda gv: gv.semver, known_game_versions)
+                    known_game_version_ids = list(map(lambda gv: gv.semver, known_game_versions))
                     new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
                     for version_id in new_game_version_ids:
-                        print('Saving new game version {}'.format(version_id))
-                        new_ver = GameVersion(semver=version_id)
-                        new_ver.save()
-                    known_game_versions = list(GameVersion.objects.all())
+                        print("Saving new game version {}".format(version_id))
+                        try:
+                            new_ver = GameVersion(semver=version_id)
+                            new_ver.save()
+                        except IntegrityError:
+                            # If another process created the version, keep going
+                            pass
                     matching_known_version = next(
                         filter(lambda gv: '.'.join(gv.semver.split('.')[0:2]) == match_version_id,
                                known_game_versions),
