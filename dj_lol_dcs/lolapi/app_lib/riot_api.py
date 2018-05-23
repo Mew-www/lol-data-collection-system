@@ -4,6 +4,7 @@ from operator import itemgetter
 
 import requests
 import json
+import time
 
 
 class RiotApi:
@@ -80,10 +81,14 @@ class RiotApi:
                           region_name,
                           'All other endpoints')
 
-    def get_matchlist(self, region_name, account_id):
+    def get_matchlist(self, region_name, account_id,
+                      end_time=int(time.time()*1000), begin_time=(int(time.time()*1000)-(7*24*60*60*1000))
+                      ):
         return self.__get(self.__endpoints.MATCHLIST_BY_ACCOUNT_ID(self.__api_hosts.get_host_by_region(region_name),
                                                                    account_id,
-                                                                   self.__api_key_container.get_api_key()),
+                                                                   self.__api_key_container.get_api_key(),
+                                                                   end_time=end_time,
+                                                                   begin_time=begin_time),
                           self.__api_key_container,
                           region_name,
                           '/lol/match/v3/matchlists/by-account/{accountId}')

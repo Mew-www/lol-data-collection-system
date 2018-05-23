@@ -93,13 +93,11 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
         # Return participant summoners
     """
 
-    # Check if match is already being observed, if so then early return. (If happens parallel, let it be.)
+    # Check if match is already being observed, if so then early return via Exception. (If happens parallel, let it be.)
     try:
         HistoricalMatch.objects.get(match_id=ongoing_match_dict['gameId'], region=region)
-        # Unacceptable, early return
         raise MatchTakenError()
     except ObjectDoesNotExist:
-        # Acceptable
         pass
 
     # Get tiers of the participants and average match tier (10+10 requests)

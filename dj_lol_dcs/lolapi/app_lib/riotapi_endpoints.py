@@ -19,11 +19,13 @@ SPECTATOR_BY_SUMMONER_ID = lambda api_host, summoner_id, api_key: (
         summoner_id,
         api_key)
 )
-MATCHLIST_BY_ACCOUNT_ID = lambda api_host, account_id, api_key: (
-    "https://{}/lol/match/v3/matchlists/by-account/{}?queue=420&api_key={}".format(
+MATCHLIST_BY_ACCOUNT_ID = lambda api_host, account_id, api_key, end_time, begin_time: (
+    "https://{}/lol/match/v3/matchlists/by-account/{}?queue=420&api_key={}&endTime={}&beginTime={}".format(
         api_host,
         account_id,
-        api_key)
+        api_key,
+        end_time,
+        begin_time)
 )
 MATCH_BY_MATCH_ID = lambda api_host, match_id, api_key: (
     "https://{}/lol/match/v3/matches/{}?api_key={}".format(
