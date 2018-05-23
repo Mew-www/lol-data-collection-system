@@ -106,14 +106,10 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     # Gather all tiers in a dict {team_key: [tier_and_misc, ..], ..}
     for p in ongoing_match_dict['participants']:
         api_p_summoner_dict = request_and_return_summoner(region.name, p['summonerName'], riotapi, retries=2)
-        participant_summoner = update_or_create_summoner(region, api_p_summoner_dict)
-        participant_summoners.append(participant_summoner)
-        api_tiers_list = request_and_return_summoner_tiers(
-            region.name,
-            participant_summoner.summoner_id,
-            riotapi,
-            retries=2)
-        participant_tier_milestone = update_summoner_tier_history(participant_summoner, api_tiers_list)
+        p_summoner = update_or_create_summoner(region, api_p_summoner_dict)
+        participant_summoners.append(p_summoner)
+        api_tiers_list = request_and_return_summoner_tiers(region.name, p_summoner.summoner_id, riotapi, retries=2)
+        participant_tier_milestone = update_summoner_tier_history(p_summoner, api_tiers_list)
         if p['teamId'] not in teams_tiers:
             teams_tiers[p['teamId']] = []
         teams_tiers[p['teamId']].append({'champion_id': p['championId'], 'tier': participant_tier_milestone.tier})
