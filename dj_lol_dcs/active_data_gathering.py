@@ -100,7 +100,9 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     except ObjectDoesNotExist:
         pass
 
-    # Get tiers of the participants and average match tier (10+10 requests)
+    # Get identities, tiers, max-???x-from-???-weeks-of-matches of the participants
+    # Maximum of 10 * (1<id> + 1<tiers> + ???<weeks-of-matchlist> + ???<matches>) = ??? requests
+    # then calculate the average match tier
     teams_tiers = {}
     participant_summoners = []
     # Gather all tiers in a dict {team_key: [tier_and_misc, ..], ..}
@@ -168,8 +170,9 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     match.game_duration = result_dict['gameDuration']
     match.match_result_json = json.dumps(result_dict)
     request_and_link_timeline_to_match(match, riotapi, result_dict['platformId'], retries=2)
+    request_and_link_histories_to_match(match, riotapi, region)
     match.save()
-    print("Saved match {} successfully in two phases (pre for avg_tier, post for result/timeline)".format(
+    print("Saved match {} successfully in two phases (pre for avg_tier, post for result/timeline/histories)".format(
         result_dict['gameId']
     ))
     return participant_summoners
@@ -305,6 +308,123 @@ def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
         print("Retried maximum of {} times - Riot API still returning errors so skipping this timeline for now".format(
             retries
         ))
+
+
+def request_and_link_histories_to_match(match, riotapi, region, retries=0):
+    """
+        If loading histories fails:
+        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
+        - else retry up to N times
+        - if still no, exit gracefully (leaving partial match data that can be filled later)
+    """
+    error_retries_done = 0
+    tries_permitted = 1 + retries
+    while error_retries_done < tries_permitted:
+        try:
+            m_data = json.loads(match.match_result_json)
+            stats_histories = {}
+            for p_identity in m_data['participantIdentities']:
+                p_id = p_identity['participantId']
+                p_data = next(filter(lambda a_p: a_p['participantId'] == p_id, m_data['participants']))
+                p_history = get_stats_history(p_identity['player']['accountId'],
+                                              p_data['championId'],
+                                              p_data['timeline']['lane'],
+                                              p_data['timeline']['role'],
+                                              m_data['gameCreation'],
+                                              riotapi, region, max_weeks_lookback=3, max_games_lookback=10)
+                stats_histories[p_data['championId']] = p_history
+            match.match_suppositions_json = json.dumps(stats_histories)
+            break
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
+                # https://developer.riotgames.com/rate-limiting.html
+                if 'X-Rate-Limit-Type' not in err.response.headers:
+                    time.sleep(5)
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # if a service rate limit error, wait the time returned in header, and retry without counting it
+                if err.response.headers['X-Rate-Limit-Type'] == 'service':
+                    time.sleep(int(err.response.headers['Retry-After']))
+                    continue  # Try again (without counting this as a retry because it is the service being crowded)
+                # else it is application or method rate limit error, something badly wrong in our rate limiting
+                else:
+                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
+                    raise RiotApiError(err.response) from None
+            else:
+                print("Failed to load a historical match (HTTP Error {}) - retry in 1,2,..".format(
+                    err.response.status_code))
+                # One, two
+                time.sleep(2)
+                error_retries_done += 1
+    if error_retries_done == tries_permitted:
+        print("Retried maximum of {} times - Riot API still returning errors so skipping this history for now".format(
+            retries
+        ))
+
+
+def get_stats_history(account_id, champion_id, lane, role,
+                      match_time, riotapi, region,
+                      max_weeks_lookback, max_games_lookback):
+
+    history = []
+
+    def parse_stats(participant_stats_dict):
+        return {
+            'kills': participant_stats_dict['kills'],
+            'deaths': participant_stats_dict['deaths'],
+            'assists': participant_stats_dict['assists'],
+        }
+
+    # Normalize lane name from match_result_json to same as here match references
+    if lane == "MIDDLE":
+        lane = "MID"
+    week_in_ms = 7*24*60*60*1000
+    for week_i in range(max_weeks_lookback):
+        end_time = match_time - 1000 - (week_i * week_in_ms)  # Offset by 1s
+        start_time = end_time - week_in_ms
+        try:
+            week_matchlist = riotapi.get_matchlist(region.name,
+                                                   account_id,
+                                                   end_time=end_time,
+                                                   begin_time=start_time)
+            for m_ref in week_matchlist.json()['matches']:
+                if m_ref['champion'] == champion_id and m_ref['lane'] == lane and m_ref['role'] == role:
+                    try:
+                        m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
+                        result_dict = json.loads(m_obj.match_result_json)
+                    except ObjectDoesNotExist:
+                        try:
+                            m_obj = HistoricalMatch(
+                                match_id=m_ref['gameId'],
+                                region=region
+                            )
+                            result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                            m_obj.game_version = get_or_create_game_version(result_dict)
+                            m_obj.game_duration = result_dict['gameDuration']
+                            m_obj.match_result_json = json.dumps(result_dict)
+                            request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
+                            m_obj.save()
+                        except IntegrityError:
+                            # If match was created by another process, fetch it
+                            m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
+                            result_dict = json.loads(m_obj.match_result_json)
+                    historical_p_identity = next(filter(lambda p: p['player']['accountId'] == account_id,
+                                                        result_dict['participantIdentities']))
+                    historical_p_id = historical_p_identity['participantId']
+                    historical_p_data = next(filter(lambda p: p['participantId'] == historical_p_id,
+                                                    result_dict['participants']))
+                    history.append(parse_stats(historical_p_data['stats']))
+                    if len(history) == max_games_lookback:
+                        break
+            if len(history) == max_games_lookback:
+                break
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                raise RiotApiError(err.response) from None
+            elif err.response.status_code == 404:
+                break  # No matches found, no point seeking from further back in history
+
+    return history
 
 
 def request_and_return_match_results(match_id, match_start_time, riotapi, platform_id, non_404_retries=0):
