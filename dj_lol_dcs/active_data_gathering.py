@@ -100,8 +100,7 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     except ObjectDoesNotExist:
         pass
 
-    # Get identities, tiers, max-???x-from-???-weeks-of-matches of the participants
-    # Maximum of 10 * (1<id> + 1<tiers> + ???<weeks-of-matchlist> + ???<matches>) = ??? requests
+    # Get identities, tiers of the participants (20 requests)
     # then calculate the average match tier
     teams_tiers = {}
     participant_summoners = []
@@ -169,7 +168,9 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     match.game_version = get_or_create_game_version(result_dict)
     match.game_duration = result_dict['gameDuration']
     match.match_result_json = json.dumps(result_dict)
+    print('Requesting match {} timeline'.format(ongoing_match_dict['gameId']))
     request_and_link_timeline_to_match(match, riotapi, result_dict['platformId'], retries=2)
+    print('Requesting match {} participants\' histories'.format(ongoing_match_dict['gameId']))
     request_and_link_histories_to_match(match, riotapi, region)
     match.save()
     print("Saved match {} successfully in two phases (pre for avg_tier, post for result/timeline/histories)".format(
@@ -323,17 +324,21 @@ def request_and_link_histories_to_match(match, riotapi, region, retries=0):
         try:
             m_data = json.loads(match.match_result_json)
             stats_histories = {}
-            for p_identity in m_data['participantIdentities']:
+            for i, p_identity in enumerate(m_data['participantIdentities']):
+                print('Requesting history {} / 10'.format(i+1))
                 p_id = p_identity['participantId']
                 p_data = next(filter(lambda a_p: a_p['participantId'] == p_id, m_data['participants']))
-                p_history = get_stats_history(p_identity['player']['accountId'],
+                p_history = get_stats_history(p_identity['player']['currentAccountId'],
+                                              p_identity['player']['accountId'],
                                               p_data['championId'],
                                               p_data['timeline']['lane'],
                                               p_data['timeline']['role'],
+                                              set([p_data['spell1Id'], p_data['spell2Id']]),
                                               m_data['gameCreation'],
-                                              riotapi, region, max_weeks_lookback=3, max_games_lookback=10)
+                                              riotapi, region,
+                                              max_weeks_lookback=3, max_games_lookback=40)
                 stats_histories[p_data['championId']] = p_history
-            match.match_suppositions_json = json.dumps(stats_histories)
+            match.match_participants_histories_json = json.dumps(stats_histories)
             break
         except RiotApiError as err:
             if err.response.status_code == 429:
@@ -362,17 +367,45 @@ def request_and_link_histories_to_match(match, riotapi, region, retries=0):
         ))
 
 
-def get_stats_history(account_id, champion_id, lane, role,
+def get_stats_history(current_account_id, account_id, champion_id, lane, role, summonerspells_set,
                       match_time, riotapi, region,
                       max_weeks_lookback, max_games_lookback):
 
-    history = []
+    lanes = {
+        'TOP': 0,
+        'MID': 0,
+        'JUNGLE': 0,
+        'NONE': 0,
+        'BOTTOM': 0
+    }
+    roles = {
+        'NONE': 0,  # "Roaming"
+        'SOLO': 0,
+        'DUO': 0,  # Shared cs
+        'DUO_CARRY': 0,  # Dedicated cs
+        'DUO_SUPPORT': 0  # No cs
+    }
+    laneroles = {}  # For auto-fill detection
+    num_games = 0  # For inactive detection
+    num_games_on_the_champion = 0  # For rusty detection
+    summonerspells_on_the_champion = []  # For "unusual summonerspells" detection
+    gamedatas_on_the_champion = []
 
-    def parse_stats(participant_stats_dict):
+    def parse_stats_one_game(participant_dict):
+        participant_stats_dict = participant_dict['stats']
+        participant_timeline_dict = participant_dict['timeline']
         return {
             'kills': participant_stats_dict['kills'],
             'deaths': participant_stats_dict['deaths'],
             'assists': participant_stats_dict['assists'],
+            'cs10': None if 'creepsPerMinDeltas' not in participant_timeline_dict or '0-10' not in participant_timeline_dict['creepsPerMinDeltas'] else participant_timeline_dict['creepsPerMinDeltas']['0-10'],
+            'cs': participant_stats_dict['totalMinionsKilled'],
+            'gold10': None if 'goldPerMinDeltas' not in participant_timeline_dict or '0-10' not in participant_timeline_dict['goldPerMinDeltas'] else participant_timeline_dict['goldPerMinDeltas']['0-10'],
+            'gold': participant_stats_dict['goldEarned'],
+            'champ_damage': participant_stats_dict['totalDamageDealtToChampions'],
+            'tower_damage': participant_stats_dict['damageDealtToTurrets'],
+            'healing': participant_stats_dict['totalHeal'],
+            'double_kills': participant_stats_dict['doubleKills']
         }
 
     # Normalize lane name from match_result_json to same as here match references
@@ -384,46 +417,103 @@ def get_stats_history(account_id, champion_id, lane, role,
         start_time = end_time - week_in_ms
         try:
             week_matchlist = riotapi.get_matchlist(region.name,
-                                                   account_id,
+                                                   current_account_id,
                                                    end_time=end_time,
                                                    begin_time=start_time)
             for m_ref in week_matchlist.json()['matches']:
-                if m_ref['champion'] == champion_id and m_ref['lane'] == lane and m_ref['role'] == role:
-                    try:
-                        m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
-                        result_dict = json.loads(m_obj.match_result_json)
-                    except ObjectDoesNotExist:
+                # Local vars for faster lookup since used multiple times
+                m_ref_lane = m_ref['lane']
+                m_ref_role = m_ref['role']
+
+                # Increment counters
+                num_games += 1
+                lanes[m_ref_lane] += 1
+                roles[m_ref_role] += 1
+                if m_ref_lane+m_ref_role not in laneroles:
+                    laneroles[m_ref_lane+m_ref_role] = 0
+                laneroles[m_ref_lane + m_ref_role] += 1
+
+                if m_ref['champion'] == champion_id:
+                    num_games_on_the_champion += 1
+                    if len(gamedatas_on_the_champion) < max_games_lookback:
                         try:
-                            m_obj = HistoricalMatch(
-                                match_id=m_ref['gameId'],
-                                region=region
-                            )
-                            result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
-                            m_obj.game_version = get_or_create_game_version(result_dict)
-                            m_obj.game_duration = result_dict['gameDuration']
-                            m_obj.match_result_json = json.dumps(result_dict)
-                            request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
-                            m_obj.save()
-                        except IntegrityError:
-                            # If match was created by another process, fetch it
                             m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
-                            result_dict = json.loads(m_obj.match_result_json)
-                    historical_p_identity = next(filter(lambda p: p['player']['accountId'] == account_id,
-                                                        result_dict['participantIdentities']))
-                    historical_p_id = historical_p_identity['participantId']
-                    historical_p_data = next(filter(lambda p: p['participantId'] == historical_p_id,
-                                                    result_dict['participants']))
-                    history.append(parse_stats(historical_p_data['stats']))
-                    if len(history) == max_games_lookback:
-                        break
-            if len(history) == max_games_lookback:
-                break
+                            if m_obj.match_result_json is not None:
+                                result_dict = json.loads(m_obj.match_result_json)
+                            else:
+                                result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                                m_obj.game_version = get_or_create_game_version(result_dict)
+                                m_obj.game_duration = result_dict['gameDuration']
+                                m_obj.match_result_json = json.dumps(result_dict)
+                                # Don't bother checking for timeline here
+                                m_obj.save()
+                        except ObjectDoesNotExist:
+                            try:
+                                m_obj = HistoricalMatch(
+                                    match_id=m_ref['gameId'],
+                                    region=region
+                                )
+                                result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                                m_obj.game_version = get_or_create_game_version(result_dict)
+                                m_obj.game_duration = result_dict['gameDuration']
+                                m_obj.match_result_json = json.dumps(result_dict)
+                                request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
+                                m_obj.save()
+                            except IntegrityError:
+                                # If match was created by another process, fetch it
+                                m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
+                                if m_obj.match_result_json is not None:
+                                    result_dict = json.loads(m_obj.match_result_json)
+                                else:
+                                    result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                        # Check if it is remake
+                        if result_dict['gameDuration'] < 300:
+                            continue
+                        historical_p_identity = next(filter(lambda p: p['player']['accountId'] == account_id,
+                                                            result_dict['participantIdentities']))
+                        historical_p_id = historical_p_identity['participantId']
+                        historical_p_data = next(filter(lambda p: p['participantId'] == historical_p_id,
+                                                        result_dict['participants']))
+                        historical_summonerspells = set([historical_p_data['spell1Id'], historical_p_data['spell2Id']])
+                        if historical_summonerspells not in summonerspells_on_the_champion:
+                            summonerspells_on_the_champion.append(historical_summonerspells)
+                        historical_record = parse_stats_one_game(historical_p_data)
+                        historical_p_teammembers_champdamage = sorted(
+                            list(map(lambda p_data: p_data['stats']['totalDamageDealtToChampions'],
+                                     filter(lambda p: p['teamId'] == historical_p_data['teamId'],
+                                            result_dict['participants']))),
+                            reverse=True)
+                        historical_record['nr_carry'] = historical_p_teammembers_champdamage.index(
+                            historical_record['champ_damage']
+                        )
+                        gamedatas_on_the_champion.append(historical_record)
         except RiotApiError as err:
             if err.response.status_code == 429:
                 raise RiotApiError(err.response) from None
             elif err.response.status_code == 404:
-                break  # No matches found, no point seeking from further back in history
+                continue  # No matches found {week_i} weeks in past, keep checking since the timeframe is explicit
 
+    # Calculate historic booleans, averages, and aggregates
+    history = {
+        # If playing not the most common lane
+        'is_offlane': lane != sorted(lanes.keys(), reverse=True, key=lambda k: lanes[k])[0] if num_games > 0 else False,
+        # If playing not the most common role
+        'is_offrole': role != sorted(roles.keys(), reverse=True, key=lambda k: roles[k])[0] if num_games > 0 else False,
+        # If playing neither of two most common lane+role combinations
+        'is_autofill': (lane+role) not in sorted(laneroles.keys(), reverse=True, key=lambda k: laneroles[k])[0:2] if num_games > 0 else False,
+        'is_rusty': num_games_on_the_champion == 0,
+        'is_inactive': num_games == 0,
+        'is_unusual_summonerspells': summonerspells_set not in summonerspells_on_the_champion if num_games_on_the_champion > 0 else False
+        # No time correlation, moving on to result data
+    }
+    if len(gamedatas_on_the_champion) > 0:
+        for attribute in gamedatas_on_the_champion[0].keys():
+            non_none_values = [d[attribute] for d in gamedatas_on_the_champion if d[attribute] is not None]
+            if len(non_none_values) > 0:
+                average = sum(non_none_values) / len(non_none_values)
+            else:
+                average = 0
+            history['avg_{}'.format(attribute)] = average
     return history
 
 
