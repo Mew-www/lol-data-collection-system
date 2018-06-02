@@ -24,13 +24,13 @@ from django.db import IntegrityError
 
 from sqlalchemy import create_engine
 import pandas as pd
+import argparse
 
 
-def get_incomplete_records():
+def get_incomplete_records(region_name, semver):
     """
         Returns (pandas) DataFrame containing:
         ['match_id'] => int64
-        ['region_name'] => string (Region.name)
         ['version_missing'] => boolean
         ['result_missing'] => boolean
         ['timeline_missing'] => boolean
@@ -40,44 +40,70 @@ def get_incomplete_records():
                                                                        os.environ['DJ_PG_PASSWORD'],
                                                                        os.environ['DJ_PG_DBNAME']))
     with db_engine.connect() as conn:
-        # Create queries
-        sql = """
-                SELECT 
-                    match_id,
-                    lolapi_region.name as region_name,
-                    CASE WHEN game_version_id IS NULL 
-                        THEN TRUE 
-                        ELSE FALSE 
-                    END as version_missing,
-                    CASE WHEN match_result_json IS NULL 
-                        THEN TRUE 
-                        ELSE FALSE 
-                    END as result_missing,
-                    CASE WHEN match_timeline_json IS NULL 
-                        THEN TRUE 
-                        ELSE FALSE 
-                    END as timeline_missing,
-                    CASE WHEN match_participants_histories_json IS NULL 
-                        THEN TRUE 
-                        ELSE FALSE 
-                    END as history_missing
-                FROM lolapi_historicalmatch 
-                INNER JOIN lolapi_gameversion AS game_version ON lolapi_historicalmatch.game_version_id = game_version.id
-                INNER JOIN lolapi_region ON lolapi_historicalmatch.region_id = lolapi_region.id 
-                WHERE                    
-                    (match_result_json IS NULL
-                    OR match_timeline_json IS NULL
-                    OR match_participants_histories_json IS NULL)
-                    AND game_version_id IS NOT NULL
-                    AND regional_tier_avg IS NOT NULL
-                    AND (game_version.semver = '8.6.1' OR game_version.semver = '8.7.1' OR game_version.semver = '8.8.1')
-                    AND game_duration > (5*60)
-                """
-        # (match_result_json IS NULL
-        # OR match_timeline_json IS NULL
-        # OR match_participants_histories_json IS NULL
-        # OR game_version_id IS NULL)
-        # AND regional_tier_avg IS NOT NULL
+        # Create queries, optionally filtering version
+        if semver is not None:
+            sql = """
+                    SELECT 
+                        match_id,
+                        CASE WHEN game_version_id IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as version_missing,
+                        CASE WHEN match_result_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as result_missing,
+                        CASE WHEN match_timeline_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as timeline_missing,
+                        CASE WHEN match_participants_histories_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as history_missing
+                    FROM lolapi_historicalmatch 
+                    INNER JOIN lolapi_gameversion ON lolapi_historicalmatch.game_version_id = lolapi_gameversion.id
+                    INNER JOIN lolapi_region ON lolapi_historicalmatch.region_id = lolapi_region.id 
+                    WHERE                    
+                        (match_result_json IS NULL
+                        OR match_timeline_json IS NULL
+                        OR match_participants_histories_json IS NULL)
+                        AND regional_tier_avg IS NOT NULL
+                        AND game_duration > (5*60)
+                        AND lolapi_region.name = '{}'
+                        AND lolapi_gameversion.semver = '{}'
+                    """.format(region_name, semver)
+        else:
+            sql = """
+                    SELECT 
+                        match_id,
+                        CASE WHEN game_version_id IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as version_missing,
+                        CASE WHEN match_result_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as result_missing,
+                        CASE WHEN match_timeline_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as timeline_missing,
+                        CASE WHEN match_participants_histories_json IS NULL 
+                            THEN TRUE 
+                            ELSE FALSE 
+                        END as history_missing
+                    FROM lolapi_historicalmatch 
+                    INNER JOIN lolapi_gameversion ON lolapi_historicalmatch.game_version_id = lolapi_gameversion.id
+                    INNER JOIN lolapi_region ON lolapi_historicalmatch.region_id = lolapi_region.id 
+                    WHERE                    
+                        (match_result_json IS NULL
+                        OR match_timeline_json IS NULL
+                        OR match_participants_histories_json IS NULL)
+                        AND regional_tier_avg IS NOT NULL
+                        AND game_duration > (5*60)
+                        AND lolapi_region.name = '{}'
+                    """.format(region_name)
         incomplete_matches_df = pd.read_sql(sql, conn)
         return incomplete_matches_df
 
@@ -324,7 +350,7 @@ def get_stats_history(current_account_id, account_id, champion_id, lane, role, s
     return history
 
 
-def main():
+def main(args):
     ratelimit_logfile_location = './{}'.format(sys.argv[1].lower()) if len(sys.argv) > 1 else None
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = json.loads(os.environ['RIOT_APP_RATE_LIMITS_JSON'])  # [[num-requests, within-seconds], ..]
@@ -378,14 +404,14 @@ def main():
 
     # Target data and up-to-date game versions
     game_versions = update_and_get_versions()
-    incomplete_matches_df = get_incomplete_records()
+    incomplete_matches_df = get_incomplete_records(args.region_name, args.semver)
 
     # Start repairing
     for row in incomplete_matches_df.itertuples(index=False):
 
         # Get respective match as Django ORM object
         match_object = HistoricalMatch.objects.get(match_id=getattr(row, 'match_id'),
-                                                   region=Region.objects.get(name=getattr(row, 'region_name')))
+                                                   region=Region.objects.get(name=args.region_name))
 
         # Fix if timeline is missing, standalone
         if getattr(row, 'timeline_missing'):
@@ -543,4 +569,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Repair missing result/timeline/history in games with known tier')
+    parser.add_argument('--region', dest='region_name', required=True, help='Region name of target games')
+    parser.add_argument('--semver', dest='semver', default=None, help='Optionally limit repairs to specific version')
+    main(parser.parse_args())
