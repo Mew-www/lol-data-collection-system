@@ -1347,7 +1347,7 @@ def main(args):
         match_df = match_to_dataframe(norm_matchdata, match_flatten_rules)
         x = match_df.drop('topside_win', 1).values
         model = load_model(args.model_path)
-        print(model.predict(x))
+        print('{}% chance of top-nexus winning'.format(model.predict_proba(x)[0]*100))
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
