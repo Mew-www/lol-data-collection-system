@@ -1314,7 +1314,7 @@ def main(args):
         for i, summoner in enumerate(target_summoners):
             p = them_as_participant[i]
             respective_team = next(filter(lambda t: t['is_topside'] == (p['teamId'] == 200), norm_matchdata['teams']))
-            p_champion_name = next(filter(lambda c: int(game_champion_data['data']['c']['key']) == p['championId'],
+            p_champion_name = next(filter(lambda c: int(game_champion_data['data'][c]['key']) == p['championId'],
                                           game_champion_data['data']))
             lanemap = json.loads(args.champion_lane_mapping)
             if p_champion_name not in lanemap:
