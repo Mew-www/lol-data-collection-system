@@ -1351,6 +1351,9 @@ def main(args):
                                            retries=0)
             player = {
                 'is_topside': p['teamId'] == 200,
+                'champion': p['championId'],
+                'lane': lane,
+                'role': role,
                 'summonerspells': [p['spell1Id'], p['spell2Id']],
                 'primary_rune_cat': p['perks']['perkStyle'],
                 'secondary_rune_cat': p['perks']['perkSubStyle'],
@@ -1366,7 +1369,7 @@ def main(args):
             }
             respective_team['players'].append(player)
 
-        print(json.dumps(norm_matchdata, indent=2))
+        print(match_to_dataframe(norm_matchdata, match_flatten_rules).shape)
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
