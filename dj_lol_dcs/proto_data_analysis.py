@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from itertools import chain
+from keras.models import load_model
 
 import lolapi.app_lib.riotapi_endpoints as riotapi_endpoints
 import lolapi.app_lib.datadragon_endpoints as d_endpoints
@@ -35,32 +36,6 @@ def match_to_dataframe(match, rules):
     return pd.DataFrame([
           [rules['match'][key](match) for key in m_rule_keys]
     ], columns=m_rule_keys)
-
-
-def normalize_x(ndarr):
-    working_copy = ndarr.copy().astype('float32')
-
-    # Find any (generally non-boolean) columns with values beyond range of [-1 ... 1]
-    columns_to_normalize = []
-    for idx, col in enumerate(working_copy.T):
-        # If values not between -1 and 1
-        if min(col) < -1 or max(col) > 1:
-            columns_to_normalize.append(idx)
-
-    # Normalize those columns
-    for i in columns_to_normalize:
-        values = working_copy.T[i]
-
-        mean = np.mean(values)
-        std = np.std(values)
-
-        values -= mean
-        values /= (2 * std)
-
-        # Apply modified values
-        working_copy[:, i] = values
-
-    return working_copy
 
 
 # http://ddragon.leagueoflegends.com/cdn/8.8.1/data/en_US/runesReforged.json
@@ -1369,7 +1344,10 @@ def main(args):
             }
             respective_team['players'].append(player)
 
-        print(match_to_dataframe(norm_matchdata, match_flatten_rules).shape)
+        match_df = match_to_dataframe(norm_matchdata, match_flatten_rules)
+        x = match_df.drop('topside_win', 1).values
+        model = load_model(args.model_path)
+        print(model.predict())
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
