@@ -1333,12 +1333,13 @@ def main(args):
             elif reallane == 'ADC':
                 lane = 'BOTTOM'
                 role = 'DUO_CARRY'
-            elif reallane == 'DUO_SUPPORT':
+            elif reallane == 'SUPPORT':
                 lane = 'BOTTOM'
                 role = 'DUO_SUPPORT'
             else:
                 print('Unknown lane {}. Exiting'.format(reallane))
                 sys.exit(0)
+            print('Retrieving history for {} ({}/10)'.format(p_champion_name, i+1))
             stat_history = request_history(ongoing_match['gameStartTime'],
                                            summoner,
                                            p['championId'], set([p['spell1Id'], p['spell2Id']]),
