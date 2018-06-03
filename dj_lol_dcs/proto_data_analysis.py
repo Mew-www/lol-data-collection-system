@@ -926,6 +926,7 @@ def request_history(game_start_time, summoner, champion_id, summonerspells, lane
                                           game_start_time,
                                           riotapi, region,
                                           max_weeks_lookback=3, max_games_lookback=40)
+            return p_history
         except RiotApiError as err:
             if err.response.status_code == 429:
                 # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
@@ -951,7 +952,6 @@ def request_history(game_start_time, summoner, champion_id, summonerspells, lane
         print("Retried maximum of {} times - Riot API still returning errors so skipping this history for now".format(
             retries
         ))
-    return p_history
 
 
 def get_stats_history(current_account_id, account_id, champion_id, lane, role, summonerspells_set,
