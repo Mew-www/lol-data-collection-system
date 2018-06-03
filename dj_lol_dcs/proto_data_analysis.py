@@ -1057,7 +1057,10 @@ def get_stats_history(current_account_id, account_id, champion_id, lane, role, s
                         if result_dict['gameDuration'] < 300:
                             continue
                         historical_p_identity = next(filter(lambda p: p['player']['accountId'] == account_id,
-                                                            result_dict['participantIdentities']))
+                                                            result_dict['participantIdentities']), None)
+                        if historical_p_identity is None:
+                            # Riot pls with these account ids, this means the current account ID is UN-OBTAINABLE here
+                            continue
                         historical_p_id = historical_p_identity['participantId']
                         historical_p_data = next(filter(lambda p: p['participantId'] == historical_p_id,
                                                         result_dict['participants']))
