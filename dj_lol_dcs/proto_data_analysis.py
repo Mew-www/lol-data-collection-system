@@ -1366,7 +1366,7 @@ def main(args):
             }
             respective_team['players'].append(player)
 
-        print(json.dumps(norm_matchdata), indent=2)
+        print(json.dumps(norm_matchdata, indent=2))
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
