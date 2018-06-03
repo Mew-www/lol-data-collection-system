@@ -1347,7 +1347,7 @@ def main(args):
         match_df = match_to_dataframe(norm_matchdata, match_flatten_rules)
         x = match_df.drop('topside_win', 1).values
         model = load_model(args.model_path)
-        print(model.predict())
+        print(model.predict(x))
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
