@@ -678,7 +678,7 @@ match_flatten_rules = {
         )
             for mix
             in generate_projected_mapside_champion_mixes()}.items(),
-        {'topside_win': None}.items()
+        {'topside_win': lambda m: None}.items()
     ))
 }
 
