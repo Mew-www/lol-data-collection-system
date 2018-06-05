@@ -351,7 +351,7 @@ def get_stats_history(current_account_id, account_id, champion_id, lane, role, s
 
 
 def main(args):
-    ratelimit_logfile_location = './{}'.format(sys.argv[1].lower()) if len(sys.argv) > 1 else None
+    ratelimit_logfile_location = './{}'.format(args.logfile) if args.logfile else None
     api_key = os.environ['RIOT_API_KEY']
     app_rate_limits = json.loads(os.environ['RIOT_APP_RATE_LIMITS_JSON'])  # [[num-requests, within-seconds], ..]
     method_rate_limits = {
@@ -572,4 +572,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Repair missing result/timeline/history in games with known tier')
     parser.add_argument('--region', dest='region_name', required=True, help='Region name of target games')
     parser.add_argument('--semver', dest='semver', default=None, help='Optionally limit repairs to specific version')
+    parser.add_argument('--logfile', dest='logfile', default=None, help='Logfile location')
     main(parser.parse_args())
