@@ -301,6 +301,8 @@ game_item_data = [
 
 
 def get_item_worth(item_id):
+    if item_id == 0:
+        return 0
     return game_item_data['data'][str(item_id)]['gold']['total']
 
 
@@ -384,7 +386,7 @@ def create_champion_lane_mapping(result, timeline):
 
 
 def parse_stats_one_game(result, timeline, participant_id):
-    gold_spent = 0
+    effective_gold_spent = 0
     kills = []
     deaths = []
     fight_events = []
@@ -392,16 +394,21 @@ def parse_stats_one_game(result, timeline, participant_id):
         for event in match_frame['events']:
             # Events are in chronological order so gold spent is calculated before/after respectively to match events
             if event['type'] == 'ITEM_PURCHASED' and event['participantId'] == participant_id:
-                gold_spent += get_item_worth(event['itemId'])
+                effective_gold_spent += get_item_worth(event['itemId'])
             elif event['type'] == 'ITEM_DESTROYED' and event['participantId'] == participant_id:
-                gold_spent -= get_item_worth(event['itemId'])
+                effective_gold_spent -= get_item_worth(event['itemId'])
+            elif event['type'] == 'ITEM_SOLD' and event['participantId'] == participant_id:
+                effective_gold_spent -= get_item_worth(event['itemId'])
+            elif event['type'] == 'ITEM_UNDO' and event['participantId'] == participant_id:
+                effective_gold_spent -= get_item_worth(event['beforeId'])
+                effective_gold_spent += get_item_worth(event['afterId'])
             elif event['type'] == 'CHAMPION_KILL':
                 contributors = [event['killerId']]+event['assistingParticipantIds']
                 if participant_id in contributors:
                     kills.append({
                         'timestamp': event['timestamp'],
                         'position': event['position'],
-                        'effective_gold': gold_spent,
+                        'effective_gold': effective_gold_spent,
                         'allies': contributors,
                         'enemies': [event['victimId']]
                     })
@@ -409,7 +416,7 @@ def parse_stats_one_game(result, timeline, participant_id):
                     deaths.append({
                         'timestamp': event['timestamp'],
                         'position': event['position'],
-                        'effective_gold': gold_spent,
+                        'effective_gold': effective_gold_spent,
                         'allies': [event['victimId']],
                         'enemies': contributors
                     })
