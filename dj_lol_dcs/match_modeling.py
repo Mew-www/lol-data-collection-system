@@ -6,11 +6,6 @@ import json
 import time
 import math
 import argparse
-import numpy as np
-import pandas as pd
-from itertools import chain
-from sklearn.utils import shuffle
-from keras.models import load_model
 
 import lolapi.app_lib.riotapi_endpoints as riotapi_endpoints
 import lolapi.app_lib.datadragon_endpoints as d_endpoints
@@ -813,7 +808,10 @@ def main(args):
             }
             respective_team['players'].append(player)
 
-        print(json.dumps(norm_matchdata))
+        if not args.outfile_location:
+            print(json.dumps(norm_matchdata))
+        else:
+            json.dump(norm_matchdata, open(args.outfile_location, 'w'))
 
     except RiotApiError as err:
         # if it is application or method rate limit error, something badly wrong in our rate limiting
@@ -847,5 +845,9 @@ if __name__ == "__main__":
                         dest='ratelimit_logfile_location',
                         default=None,
                         help='Ratelimit logfile location')
+    parser.add_argument('--output', action='store',
+                        dest='outfile_location',
+                        default=None,
+                        help='Optional output file location')
     main(parser.parse_args())
 
