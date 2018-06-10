@@ -486,7 +486,7 @@ def parse_stats_one_game(result, timeline, participant_id):
     for e in sorted_fight_events:
         e['allies'] = [get_participant_champion(p_id) for p_id in e['allies']]
         e['enemies'] = [get_participant_champion(p_id) for p_id in e['enemies']]
-        e['outcome'] = ','.join(get_participant_champion(p_id) for p_id in e['victims'])
+        e['outcome'] = ','.join(str(get_participant_champion(p_id)) for p_id in e['victims'])
 
     return sorted_fight_events
 
