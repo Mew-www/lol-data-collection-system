@@ -585,6 +585,7 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                         # Parse data
                         historical_record = parse_stats_one_game(result_dict, timeline_dict, p_data['participantId'])
                         gamedatas_on_the_champion_on_the_lane.append(historical_record)
+                        print('Saved parsed stats from a match')
         except RiotApiError as err:
             if err.response.status_code == 429:
                 raise RiotApiError(err.response) from None
