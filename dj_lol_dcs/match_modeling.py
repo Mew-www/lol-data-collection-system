@@ -303,6 +303,8 @@ game_item_data = [
 def get_item_worth(item_id):
     if item_id == 0:
         return 0
+    if item_id == 1018:
+        return 2200
     return game_item_data['data'][str(item_id)]['gold']['total']
 
 
