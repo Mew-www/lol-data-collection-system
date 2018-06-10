@@ -491,9 +491,15 @@ def parse_stats_one_game(result, timeline, participant_id):
         event['victims'] = [get_participant_champion(p_id) for p_id in event['victims']]
     # Mark duplicates to leave only "full" fights to remain (max 30s)
     for idx, event in enumerate(sorted_fight_events):
+        # Skip events that are already fully cleared (all and any bring problems if subjected to empty [])
+        if not len(event['victims']):
+            continue
         t = event['timestamp']
         events_up_to_30s = filter(lambda e: (t - 30000) <= e['timestamp'], sorted_fight_events[idx:])
         for consecutive_event in events_up_to_30s:
+            # Skip consecutive events that are fully cleared (all and any bring problems if subjected to empty [])
+            if not len(consecutive_event['victims']):
+                continue
             if all((victim in event['victims']) for victim in consecutive_event['victims']):
                 # Means the consecutive event is a subset of the current event
                 for ally in consecutive_event['allies']:
