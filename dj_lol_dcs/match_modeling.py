@@ -391,6 +391,10 @@ def create_champion_lane_mapping(result, timeline):
 
 
 def parse_stats_one_game(result, timeline, participant_id):
+
+    def get_participant_champion(participant_id):
+        return next(filter(lambda p: p['participantId'] == participant_id, result['participants']))['championId']
+
     effective_gold_spent = 0
     kills = []
     deaths = []
@@ -469,6 +473,10 @@ def parse_stats_one_game(result, timeline, participant_id):
     # Join, and sort them by timestamp, and group presumably duplicate events
     sorted_fight_events = sorted(kills+deaths, key=lambda e: e['timestamp'])
     # TODO grouping presumably duplicates
+    # Replace participant ids with champion ids
+    for e in sorted_fight_events:
+        e['allies'] = [get_participant_champion(p_id) for p_id in e['allies']]
+        e['enemies'] = [get_participant_champion(p_id) for p_id in e['enemies']]
 
     return sorted_fight_events
 
