@@ -393,6 +393,9 @@ def create_champion_lane_mapping(result, timeline):
 def parse_stats_one_game(result, timeline, participant_id):
 
     def get_participant_champion(p_id):
+        # Killer may be a tower, participant_id 0
+        if p_id == 0:
+            return 0
         return next(filter(lambda p: p['participantId'] == p_id, result['participants']))['championId']
 
     effective_gold_spent = 0
