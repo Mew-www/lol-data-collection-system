@@ -256,6 +256,9 @@ def request_history(game_start_time, summoner, champion_id, summonerspells, real
         - else retry up to N times
         - if still no, exit gracefully (leaving partial match data that can be filled later)
     """
+    # Fix an API error with "just-started" games
+    if not game_start_time:
+        game_start_time = time.time()*1000
     error_retries_done = 0
     tries_permitted = 1 + retries
     while error_retries_done < tries_permitted:
@@ -440,54 +443,88 @@ def parse_stats_one_game(result, timeline, participant_id):
                     })
                 fight_events.append(event)  # For determining ratio of people involved without iterating all events
     # Add enemies involved
-    for dataset in kills:
-        t = dataset['timestamp']
+    for kill_event in kills:
+        t = kill_event['timestamp']
         events_within_15s = filter(lambda e: (t - 15000) <= e['timestamp'] <= (t + 15000), fight_events)
         for event in events_within_15s:
             contributors = [event['killerId']]+event['assistingParticipantIds']
-            for ally in dataset['allies']:
+            for ally in kill_event['allies']:
                 if ally in contributors:
                     # Means they (allies) scored an other kill event within 15s -> enemy
-                    if event['victimId'] not in dataset['enemies']:
-                        dataset['enemies'].append(event['victimId'])
-                    if event['victimId'] not in dataset['victims']:
-                        dataset['victims'].append(event['victimId'])
+                    if event['victimId'] not in kill_event['enemies']:
+                        kill_event['enemies'].append(event['victimId'])
+                    if event['victimId'] not in kill_event['victims']:
+                        kill_event['victims'].append(event['victimId'])
                 elif ally == event['victimId']:
                     # Means both teams scored some within 15s
                     for enemy in contributors:
-                        if enemy not in dataset['enemies']:
-                            dataset['enemies'].append(enemy)
-                        if event['victimId'] not in dataset['victims']:
-                            dataset['victims'].append(event['victimId'])
+                        if enemy not in kill_event['enemies']:
+                            kill_event['enemies'].append(enemy)
+                        if event['victimId'] not in kill_event['victims']:
+                            kill_event['victims'].append(event['victimId'])
     # Reversed setting (compared to kills)
-    for dataset in deaths:
-        t = dataset['timestamp']
+    for death_event in deaths:
+        t = death_event['timestamp']
         events_within_15s = filter(lambda e: (t - 15000) <= e['timestamp'] <= (t + 15000), fight_events)
         for event in events_within_15s:
             contributors = [event['killerId']]+event['assistingParticipantIds']
-            for enemy in dataset['enemies']:
+            for enemy in death_event['enemies']:
                 if enemy in contributors:
                     # Means they (enemies) scored an other kill event within 15s -> ally
-                    if event['victimId'] not in dataset['allies']:
-                        dataset['allies'].append(event['victimId'])
-                    if event['victimId'] not in dataset['victims']:
-                        dataset['victims'].append(event['victimId'])
+                    if event['victimId'] not in death_event['allies']:
+                        death_event['allies'].append(event['victimId'])
+                    if event['victimId'] not in death_event['victims']:
+                        death_event['victims'].append(event['victimId'])
                 elif enemy == event['victimId']:
                     # Means both teams scored some within 15s
                     for ally in contributors:
-                        if ally not in dataset['allies']:
-                            dataset['allies'].append(ally)
-                        if event['victimId'] not in dataset['victims']:
-                            dataset['victims'].append(event['victimId'])
+                        if ally not in death_event['allies']:
+                            death_event['allies'].append(ally)
+                        if event['victimId'] not in death_event['victims']:
+                            death_event['victims'].append(event['victimId'])
     # Join, and sort them by timestamp, and group presumably duplicate events
     sorted_fight_events = sorted(kills+deaths, key=lambda e: e['timestamp'])
-    # TODO grouping presumably duplicates
     # Replace participant ids with champion ids
-    for e in sorted_fight_events:
-        e['allies'] = [get_participant_champion(p_id) for p_id in e['allies']]
-        e['enemies'] = [get_participant_champion(p_id) for p_id in e['enemies']]
-        e['outcome'] = ','.join(str(get_participant_champion(p_id)) for p_id in e['victims'])
-
+    for event in sorted_fight_events:
+        event['allies'] = [get_participant_champion(p_id) for p_id in event['allies']]
+        event['enemies'] = [get_participant_champion(p_id) for p_id in event['enemies']]
+        event['victims'] = [get_participant_champion(p_id) for p_id in event['victims']]
+    # Mark duplicates to leave only "full" fights to remain (max 30s)
+    for idx, event in enumerate(sorted_fight_events):
+        t = event['timestamp']
+        events_up_to_30s = filter(lambda e: (t - 30000) <= e['timestamp'], sorted_fight_events[idx:])
+        for consecutive_event in events_up_to_30s:
+            if all((victim in event['victims']) for victim in consecutive_event['victims']):
+                # Means the consecutive event is a subset of the current event
+                for ally in consecutive_event['allies']:
+                    # Move any new participants to current event
+                    if ally not in event['allies']:
+                        event['allies'].append(ally)
+                for enemy in consecutive_event['enemies']:
+                    # Move any new enemy to current event
+                    if enemy not in event['enemies']:
+                        event['enemies'].append(enemy)
+                # Clear the victims list to indicate the (consecutive) event is a subset (and redundant, filtered later)
+                consecutive_event['victims'] = []
+            elif all((victim in consecutive_event['victims']) for victim in event['victims']):
+                # Means the current event is a subset of the consecutive event
+                for ally in event['allies']:
+                    # Move any new participants to consecutive event
+                    if ally not in consecutive_event['allies']:
+                        consecutive_event['allies'].append(ally)
+                for enemy in event['enemies']:
+                    # Move any new enemy to consecutive event
+                    if enemy not in consecutive_event['enemies']:
+                        consecutive_event['enemies'].append(enemy)
+                # Clear the victims list to indicate the (current) event is a subset (and redundant, filtered later)
+                event['victims'] = []
+                # Break the 30s event loop, since we emptied the current event. Continue from the next event's 30s
+                break
+            elif any((victim in event['victims']) for victim in consecutive_event['victims']):
+                # Means the events contain partially same fight, remove those in current event, leave the off-spin
+                consecutive_event['victims'] = [v for v in consecutive_event['victims'] if (v not in event['victims'])]
+    # Remove duplicates
+    sorted_fight_events = list(filter(lambda e: len(e['victims']) > 0, sorted_fight_events))
     return sorted_fight_events
 
 
@@ -495,13 +532,14 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                       match_time, riotapi, region,
                       max_weeks_lookback, max_games_lookback):
 
-    lanes = {
-        'TOP': 0,
-        'JUNGLE': 0,
-        'MID': 0,
-        'BOTTOM': 0,
-        'SUPPORT': 0
-    }
+    # Currently NOT checking lane since an accurate check would require loading both result + timeline for each game_ref
+    # lanes = {
+    #    'TOP': 0,
+    #    'JUNGLE': 0,
+    #    'MID': 0,
+    #    'BOTTOM': 0,
+    #    'SUPPORT': 0
+    # }
     num_games = 0  # For inactive detection
     num_games_on_the_champion = 0  # For rusty detection
     summonerspells_on_the_champion = []  # For "unusual summonerspells" detection
