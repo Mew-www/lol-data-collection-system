@@ -517,10 +517,10 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                                                    account_id,
                                                    end_time=end_time,
                                                    begin_time=start_time)
+            print('Iterating {} - {} weeks ago, {} matches'.format(week_i,
+                                                                   week_i+1,
+                                                                   len(week_matchlist.json()['matches'])))
             for m_ref in week_matchlist.json()['matches']:
-                print('Iterating {} - {} weeks ago, {} matches'.format(week_i,
-                                                                       week_i+1,
-                                                                       len(week_matchlist.json()['matches'])))
                 num_games += 1
                 if m_ref['champion'] == champion_id:
                     num_games_on_the_champion += 1
