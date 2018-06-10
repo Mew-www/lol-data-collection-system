@@ -410,7 +410,9 @@ def parse_stats_one_game(result, timeline, participant_id):
                         'position': event['position'],
                         'effective_gold': effective_gold_spent,
                         'allies': contributors,
-                        'enemies': [event['victimId']]
+                        'enemies': [event['victimId']],
+                        # Initial outcome, to be fixed depending if adjacent fight events
+                        'outcome': 1
                     })
                 elif participant_id == event['victimId']:
                     deaths.append({
@@ -418,7 +420,9 @@ def parse_stats_one_game(result, timeline, participant_id):
                         'position': event['position'],
                         'effective_gold': effective_gold_spent,
                         'allies': [event['victimId']],
-                        'enemies': contributors
+                        'enemies': contributors,
+                        # Initial outcome, to be fixed depending if adjacent fight events
+                        'outcome': -1
                     })
                 fight_events.append(event)  # For determining ratio of people involved without iterating all events
     # Add enemies involved
@@ -432,11 +436,13 @@ def parse_stats_one_game(result, timeline, participant_id):
                     # Means they (allies) scored an other kill event within 15s -> enemy
                     if event['victimId'] not in dataset['enemies']:
                         dataset['enemies'].append(event['victimId'])
+                        dataset['outcome'] += 1
                 elif ally == event['victimId']:
                     # Means both teams scored some within 15s
                     for enemy in contributors:
                         if enemy not in dataset['enemies']:
                             dataset['enemies'].append(enemy)
+                            dataset['outcome'] -= 1
     # Reversed setting (compared to kills)
     for dataset in deaths:
         t = dataset['timestamp']
@@ -448,12 +454,18 @@ def parse_stats_one_game(result, timeline, participant_id):
                     # Means they (enemies) scored an other kill event within 15s -> ally
                     if event['victimId'] not in dataset['allies']:
                         dataset['allies'].append(event['victimId'])
+                        dataset['outcome'] -= 1
                 elif enemy == event['victimId']:
                     # Means both teams scored some within 15s
                     for ally in contributors:
                         if ally not in dataset['allies']:
                             dataset['allies'].append(ally)
-    return {'kills': kills, 'deaths': deaths}
+                            dataset['outcome'] += 1
+    # Join, and sort them by timestamp, and group presumably duplicate events
+    sorted_fight_events = sorted(kills+deaths, key=lambda e: e['timestamp'])
+    # TODO grouping presumably duplicates
+
+    return sorted_fight_events
 
 
 def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
