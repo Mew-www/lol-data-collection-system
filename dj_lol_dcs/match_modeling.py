@@ -518,6 +518,9 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                                                    end_time=end_time,
                                                    begin_time=start_time)
             for m_ref in week_matchlist.json()['matches']:
+                print('Iterating {} - {} weeks ago, {} matches'.format(week_i,
+                                                                       week_i+1,
+                                                                       len(week_matchlist.json()['matches'])))
                 num_games += 1
                 if m_ref['champion'] == champion_id:
                     num_games_on_the_champion += 1
@@ -587,6 +590,9 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                 raise RiotApiError(err.response) from None
             elif err.response.status_code == 404:
                 continue  # No matches found {week_i} weeks in past, keep checking since the timeframe is explicit
+            else:
+                print('Unexpected HTTP {} error when querying match history ({})'.format(err.response.status_code,
+                                                                                         err.response.url.split('?')[0]))
 
     history = {
         'is_rusty': num_games_on_the_champion == 0,
