@@ -392,8 +392,8 @@ def create_champion_lane_mapping(result, timeline):
 
 def parse_stats_one_game(result, timeline, participant_id):
 
-    def get_participant_champion(participant_id):
-        return next(filter(lambda p: p['participantId'] == participant_id, result['participants']))['championId']
+    def get_participant_champion(p_id):
+        return next(filter(lambda p: p['participantId'] == p_id, result['participants']))['championId']
 
     effective_gold_spent = 0
     kills = []
