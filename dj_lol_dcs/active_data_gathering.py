@@ -663,7 +663,6 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                         # Check if lane is correct
                         lane_then = create_champion_lane_mapping(result_dict, timeline_dict)[champion_id]
                         if lane_then != reallane:
-                            print('Incorrect lane, lane_then {} lane_now {}'.format(lane_then, reallane))
                             continue
 
                         # Ensure we have items_dictionary from static data or (preferably) cached in memory
