@@ -639,7 +639,7 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
         'is_rusty': num_games_on_the_champion == 0,
         'is_inactive': num_games == 0,
         'is_unusual_summonerspells': summonerspells_set not in summonerspells_on_the_champion if num_games_on_the_champion > 0 else False,
-        'kill_participation': gamedatas_on_the_champion_on_the_lane
+        'fight_participation': gamedatas_on_the_champion_on_the_lane
     }
     return history
 
