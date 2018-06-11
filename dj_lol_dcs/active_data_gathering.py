@@ -394,7 +394,7 @@ def request_and_link_histories_to_match(match, riotapi, region, items_dictionari
     while error_retries_done < tries_permitted:
         try:
             m_result = json.loads(match.match_result_json)
-            m_timeline = json.loads(match.match_result_json)
+            m_timeline = json.loads(match.match_timeline_json)
             stats_histories = {}
             for i, p_identity in enumerate(m_result['participantIdentities']):
                 print('Requesting history {} / 10'.format(i+1))
