@@ -495,7 +495,7 @@ def parse_stats_one_game(result, timeline, participant_id):
         if not len(event['victims']):
             continue
         t = event['timestamp']
-        events_up_to_30s = filter(lambda e: (t - 30000) <= e['timestamp'], sorted_fight_events[idx:])
+        events_up_to_30s = filter(lambda e: e['timestamp'] <= (t + 30000), sorted_fight_events[idx:])
         for consecutive_event in events_up_to_30s:
             # Skip consecutive events that are fully cleared (all and any bring problems if subjected to empty [])
             if not len(consecutive_event['victims']):
