@@ -561,9 +561,6 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                                                    account_id,
                                                    end_time=end_time,
                                                    begin_time=start_time)
-            print('Iterating {} - {} weeks ago, {} matches'.format(week_i,
-                                                                   week_i+1,
-                                                                   len(week_matchlist.json()['matches'])))
             for m_ref in week_matchlist.json()['matches']:
                 num_games += 1
                 if m_ref['champion'] == champion_id:
@@ -629,7 +626,6 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                         # Parse data
                         historical_record = parse_stats_one_game(result_dict, timeline_dict, p_data['participantId'])
                         gamedatas_on_the_champion_on_the_lane.append(historical_record)
-                        print('Saved parsed stats from a match')
         except RiotApiError as err:
             if err.response.status_code == 429:
                 raise RiotApiError(err.response) from None
