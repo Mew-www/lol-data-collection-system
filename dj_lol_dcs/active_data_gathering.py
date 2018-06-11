@@ -171,6 +171,7 @@ def persist_ongoing_match_and_get_participant_summoners(riotapi, known_tiers, re
     match.match_result_json = json.dumps(result_dict)
     print('Requesting match {} timeline'.format(ongoing_match_dict['gameId']))
     request_and_link_timeline_to_match(match, riotapi, result_dict['platformId'], retries=2)
+    match.save()
     try:
         print('Requesting match {} participants\' histories'.format(ongoing_match_dict['gameId']))
         request_and_link_histories_to_match(match, riotapi, region, items_dictionaries)
