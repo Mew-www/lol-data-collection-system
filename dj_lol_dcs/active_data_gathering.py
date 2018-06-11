@@ -288,7 +288,7 @@ def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
         try:
             timeline_dict = riotapi.get_match_timeline(platform_id, match.match_id).json()
             match.match_timeline_json = json.dumps(timeline_dict)
-            break
+            return timeline_dict
         except RiotApiError as err:
             if err.response.status_code == 429:
                 # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
