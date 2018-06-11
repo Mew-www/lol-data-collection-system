@@ -257,7 +257,7 @@ def request_history(game_start_time, summoner, champion_id, summonerspells, real
         - if still no, exit gracefully (leaving partial match data that can be filled later)
     """
     # Fix an API error with "just-started" games
-    if not game_start_time:
+    if not int(game_start_time):
         game_start_time = time.time()*1000
     error_retries_done = 0
     tries_permitted = 1 + retries
@@ -495,7 +495,7 @@ def parse_stats_one_game(result, timeline, participant_id):
         if not len(event['victims']):
             continue
         t = event['timestamp']
-        events_up_to_30s = filter(lambda e: e['timestamp'] <= (t + 30000), sorted_fight_events[idx:])
+        events_up_to_30s = filter(lambda e: e['timestamp'] <= (t + 30000), sorted_fight_events[(idx+1):])
         for consecutive_event in events_up_to_30s:
             # Skip consecutive events that are fully cleared (all and any bring problems if subjected to empty [])
             if not len(consecutive_event['victims']):
