@@ -200,7 +200,7 @@ def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
         ))
 
 
-def parse_stats_one_game(result, timeline, items_dictionary, participant_id):
+def parse_fights_one_game(result, timeline, items_dictionary, participant_id):
 
     def get_item_worth(item_id):
         if item_id == 0:
@@ -347,6 +347,96 @@ def parse_stats_one_game(result, timeline, items_dictionary, participant_id):
     return sorted_fight_events
 
 
+def parse_postgame_stats(participant_data):
+    postgame_stat_extraction_rules = {
+        'gold_earned': lambda participant: participant['stats']['goldEarned'],
+        'gold_spent': lambda participant: participant['stats']['goldSpent'],
+        'gold_per_min_0_to_10': lambda participant: 0 if 'goldPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['goldPerMinDeltas'] else participant['timeline']['goldPerMinDeltas']['0-10'],
+        'gold_per_min_10_to_20': lambda participant: 0 if 'goldPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['goldPerMinDeltas'] else participant['timeline']['goldPerMinDeltas']['10-20'],
+        'gold_per_min_20_to_30': lambda participant: 0 if 'goldPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['goldPerMinDeltas'] else participant['timeline']['goldPerMinDeltas']['20-30'],
+        'gold_per_min_30_to_40': lambda participant: 0 if 'goldPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['goldPerMinDeltas'] else participant['timeline']['goldPerMinDeltas']['30-40'],
+        'damage_to_champions_total': lambda participant: participant['stats']['totalDamageDealtToChampions'],
+        'damage_to_champions_truetype': lambda participant: participant['stats']['trueDamageDealtToChampions'],
+        'damage_to_champions_physical': lambda participant: participant['stats']['physicalDamageDealtToChampions'],
+        'damage_to_champions_magical': lambda participant: participant['stats']['magicDamageDealtToChampions'],
+        'kills': lambda participant: participant['stats']['kills'],
+        'assists': lambda participant: participant['stats']['assists'],
+        'double_kills': lambda participant: participant['stats']['doubleKills'],
+        'triple_kills': lambda participant: participant['stats']['tripleKills'],
+        'quadra_kills': lambda participant: participant['stats']['quadraKills'],
+        'penta_kills': lambda participant: participant['stats']['pentaKills'],
+        'hexa_kills': lambda participant: participant['stats']['unrealKills'],
+        'max_kill_num_multikill': lambda participant: participant['stats']['largestMultiKill'],
+        'killing_sprees': lambda participant: participant['stats']['killingSprees'],
+        'max_kill_num_killingspree': lambda participant: participant['stats']['largestKillingSpree'],
+        'damage_taken_total': lambda participant: participant['stats']['totalDamageTaken'],
+        'damage_taken_truetype': lambda participant: participant['stats']['trueDamageTaken'],
+        'damage_taken_physical': lambda participant: participant['stats']['physicalDamageTaken'],
+        'damage_taken_magical': lambda participant: participant['stats']['magicalDamageTaken'],
+        'damage_taken_mitigated': lambda participant: participant['stats']['damageSelfMitigated'],
+        'damage_taken_per_min_0_to_10': lambda participant: 0 if 'damageTakenPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['damageTakenPerMinDeltas'] else participant['timeline']['damageTakenPerMinDeltas']['0-10'],
+        'damage_taken_per_min_10_to_20': lambda participant: 0 if 'damageTakenPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['damageTakenPerMinDeltas'] else participant['timeline']['damageTakenPerMinDeltas']['10-20'],
+        'damage_taken_per_min_20_to_30': lambda participant: 0 if 'damageTakenPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['damageTakenPerMinDeltas'] else participant['timeline']['damageTakenPerMinDeltas']['20-30'],
+        'damage_taken_per_min_30_to_40': lambda participant: 0 if 'damageTakenPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['damageTakenPerMinDeltas'] else participant['timeline']['damageTakenPerMinDeltas']['30-40'],
+        'longest_time_living': lambda participant: participant['stats']['longestTimeSpentLiving'],
+        'damage_healed': lambda participant: participant['stats']['totalHeal'],
+        'targets_healed': lambda participant: participant['stats']['totalUnitsHealed'],
+        'deaths': lambda participant: participant['stats']['deaths'],
+        'wards_placed': lambda participant: participant['stats']['wardsPlaced'],
+        'wards_killed': lambda participant: participant['stats']['wardsKilled'],
+        'normal_wards_bought': lambda participant: participant['stats']['sightWardsBoughtInGame'],
+        'control_wards_bought': lambda participant: participant['stats']['visionWardsBoughtInGame'],
+        'player_score_rank': lambda participant: participant['stats']['totalScoreRank'],
+        'player_score_total': lambda participant: participant['stats']['totalPlayerScore'],
+        'player_score_objective': lambda participant: participant['stats']['objectivePlayerScore'],
+        'player_score_combat': lambda participant: participant['stats']['combatPlayerScore'],
+        'player_score_vision': lambda participant: participant['stats']['visionScore'],
+        'damage_to_turrets_total': lambda participant: participant['stats']['damageDealtToTurrets'],
+        'damage_to_pit_monsters_total': lambda participant: participant['stats']['damageDealtToObjectives'] - participant['stats']['damageDealtToTurrets'],
+        'damage_to_creeps_and_wards_total': lambda participant: participant['stats']['totalDamageDealt'] - participant['stats']['totalDamageDealtToChampions'] - participant['stats']['damageDealtToObjectives'],
+        'turrets_killed': lambda participant: participant['stats']['turretKills'],
+        'inhibitors_killed': lambda participant: participant['stats']['inhibitorKills'],
+        'damage_largest_criticalstrike': lambda participant: participant['stats']['largestCriticalStrike'],
+        'minions_killed_total': lambda participant: participant['stats']['totalMinionsKilled'],
+        'minions_killed_jungle': lambda participant: participant['stats']['neutralMinionsKilled'],
+        'minions_killed_jungle_allyside': lambda participant: participant['stats']['neutralMinionsKilledTeamJungle'],
+        'minions_killed_jungle_enemyside': lambda participant: participant['stats']['neutralMinionsKilledEnemyJungle'],
+        'minions_killed_per_min_0_to_10': lambda participant: 0 if 'creepsPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['creepsPerMinDeltas'] else participant['timeline']['creepsPerMinDeltas']['0-10'],
+        'minions_killed_per_min_10_to_20': lambda participant: 0 if 'creepsPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['creepsPerMinDeltas'] else participant['timeline']['creepsPerMinDeltas']['10-20'],
+        'minions_killed_per_min_20_to_30': lambda participant: 0 if 'creepsPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['creepsPerMinDeltas'] else participant['timeline']['creepsPerMinDeltas']['20-30'],
+        'minions_killed_per_min_30_to_40': lambda participant: 0 if 'creepsPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['creepsPerMinDeltas'] else participant['timeline']['creepsPerMinDeltas']['30-40'],
+        'xp_gained_per_min_0_to_10': lambda participant: 0 if 'xpPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['xpPerMinDeltas'] else participant['timeline']['xpPerMinDeltas']['0-10'],
+        'xp_gained_per_min_10_to_20': lambda participant: 0 if 'xpPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['xpPerMinDeltas'] else participant['timeline']['xpPerMinDeltas']['10-20'],
+        'xp_gained_per_min_20_to_30': lambda participant: 0 if 'xpPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['xpPerMinDeltas'] else participant['timeline']['xpPerMinDeltas']['20-30'],
+        'xp_gained_per_min_30_to_40': lambda participant: 0 if 'xpPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['xpPerMinDeltas'] else participant['timeline']['xpPerMinDeltas']['30-40'],
+        'cc_score_applied_pre_mitigation': lambda participant: participant['stats']['totalTimeCrowdControlDealt'],
+        'cc_score_applied_post_mitigation': lambda participant: participant['stats']['timeCCingOthers'],
+        'scored_first_blood_kill': lambda participant: False if 'firstBloodKill' not in participant['stats'] else participant['stats']['firstBloodKill'],
+        'scored_first_blood_assist': lambda participant: False if 'firstBloodAssist' not in participant['stats'] else participant['stats']['firstBloodAssist'],
+        'scored_first_tower_kill': lambda participant: False if 'firstTowerKill' not in participant['stats'] else participant['stats']['firstTowerKill'],
+        'scored_first_tower_assist': lambda participant: False if 'firstTowerAssist' not in participant['stats'] else participant['stats']['firstTowerAssist'],
+        'scored_first_inhibitor_kill': lambda participant: False if 'firstInhibitorKill' not in participant['stats'] else participant['stats']['firstInhibitorKill'],
+        'scored_first_inhibitor_assist': lambda participant: False if 'firstInhibitorAssist' not in participant['stats'] else participant['stats']['firstInhibitorAssist'],
+        'damage_taken_diff_per_min_0_to_10': lambda participant: 0 if 'damageTakenDiffPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['damageTakenDiffPerMinDeltas'] else participant['timeline']['damageTakenDiffPerMinDeltas']['0-10'],
+        'damage_taken_diff_per_min_10_to_20': lambda participant: 0 if 'damageTakenDiffPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['damageTakenDiffPerMinDeltas'] else participant['timeline']['damageTakenDiffPerMinDeltas']['10-20'],
+        'damage_taken_diff_per_min_20_to_30': lambda participant: 0 if 'damageTakenDiffPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['damageTakenDiffPerMinDeltas'] else participant['timeline']['damageTakenDiffPerMinDeltas']['20-30'],
+        'damage_taken_diff_per_min_30_to_40': lambda participant: 0 if 'damageTakenDiffPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['damageTakenDiffPerMinDeltas'] else participant['timeline']['damageTakenDiffPerMinDeltas']['30-40'],
+        'minions_killed_diff_per_min_0_to_10': lambda participant: 0 if 'csDiffPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['csDiffPerMinDeltas'] else participant['timeline']['csDiffPerMinDeltas']['0-10'],
+        'minions_killed_diff_per_min_10_to_20': lambda participant: 0 if 'csDiffPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['csDiffPerMinDeltas'] else participant['timeline']['csDiffPerMinDeltas']['10-20'],
+        'minions_killed_diff_per_min_20_to_30': lambda participant: 0 if 'csDiffPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['csDiffPerMinDeltas'] else participant['timeline']['csDiffPerMinDeltas']['20-30'],
+        'minions_killed_diff_per_min_30_to_40': lambda participant: 0 if 'csDiffPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['csDiffPerMinDeltas'] else participant['timeline']['csDiffPerMinDeltas']['30-40'],
+        'xp_gained_diff_per_min_0_to_10': lambda participant: 0 if 'xpDiffPerMinDeltas' not in participant['timeline'] or '0-10' not in participant['timeline']['xpDiffPerMinDeltas'] else participant['timeline']['xpDiffPerMinDeltas']['0-10'],
+        'xp_gained_diff_per_min_10_to_20': lambda participant: 0 if 'xpDiffPerMinDeltas' not in participant['timeline'] or '10-20' not in participant['timeline']['xpDiffPerMinDeltas'] else participant['timeline']['xpDiffPerMinDeltas']['10-20'],
+        'xp_gained_diff_per_min_20_to_30': lambda participant: 0 if 'xpDiffPerMinDeltas' not in participant['timeline'] or '20-30' not in participant['timeline']['xpDiffPerMinDeltas'] else participant['timeline']['xpDiffPerMinDeltas']['20-30'],
+        'xp_gained_diff_per_min_30_to_40': lambda participant: 0 if 'xpDiffPerMinDeltas' not in participant['timeline'] or '30-40' not in participant['timeline']['xpDiffPerMinDeltas'] else participant['timeline']['xpDiffPerMinDeltas']['30-40'],
+        'champion_level': lambda participant: participant['stats']['champLevel']
+    }
+    participant_postgame_stats = {}
+    for statname, extraction_fn in postgame_stat_extraction_rules.items():
+        participant_postgame_stats[statname] = extraction_fn(participant_data)
+    return participant_postgame_stats
+
+
 def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                       match_time, riotapi, region, items_dictionaries,
                       max_weeks_lookback, max_games_lookback):
@@ -362,7 +452,90 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
     num_games = 0  # For inactive detection
     num_games_on_the_champion = 0  # For rusty detection
     summonerspells_on_the_champion = []  # For "unusual summonerspells" detection
-    gamedatas_on_the_champion_on_the_lane = []
+    fighting_on_the_champion_as_the_lane = []
+    postgame_stats_on_the_champion_as_the_lane = {
+        'gold_earned': [],
+        'gold_spent': [],
+        'gold_per_min_0_to_10': [],
+        'gold_per_min_10_to_20': [],
+        'gold_per_min_20_to_30': [],
+        'gold_per_min_30_to_40': [],
+        'damage_to_champions_total': [],
+        'damage_to_champions_truetype': [],
+        'damage_to_champions_physical': [],
+        'damage_to_champions_magical': [],
+        'kills': [],
+        'assists': [],
+        'double_kills': [],
+        'triple_kills': [],
+        'quadra_kills': [],
+        'penta_kills': [],
+        'hexa_kills': [],
+        'max_kill_num_multikill': [],
+        'killing_sprees': [],
+        'max_kill_num_killingspree': [],
+        'damage_taken_total': [],
+        'damage_taken_truetype': [],
+        'damage_taken_physical': [],
+        'damage_taken_magical': [],
+        'damage_taken_mitigated': [],
+        'damage_taken_per_min_0_to_10': [],
+        'damage_taken_per_min_10_to_20': [],
+        'damage_taken_per_min_20_to_30': [],
+        'damage_taken_per_min_30_to_40': [],
+        'longest_time_living': [],
+        'damage_healed': [],
+        'targets_healed': [],
+        'deaths': [],
+        'wards_placed': [],
+        'wards_killed': [],
+        'normal_wards_bought': [],
+        'control_wards_bought': [],
+        'player_score_rank': [],
+        'player_score_total': [],
+        'player_score_objective': [],
+        'player_score_combat': [],
+        'player_score_vision': [],
+        'damage_to_turrets_total': [],
+        'damage_to_pit_monsters_total': [],
+        'damage_to_creeps_and_wards_total': [],
+        'turrets_killed': [],
+        'inhibitors_killed': [],
+        'damage_largest_criticalstrike': [],
+        'minions_killed_total': [],
+        'minions_killed_jungle': [],
+        'minions_killed_jungle_allyside': [],
+        'minions_killed_jungle_enemyside': [],
+        'minions_killed_per_min_0_to_10': [],
+        'minions_killed_per_min_10_to_20': [],
+        'minions_killed_per_min_20_to_30': [],
+        'minions_killed_per_min_30_to_40': [],
+        'xp_gained_per_min_0_to_10': [],
+        'xp_gained_per_min_10_to_20': [],
+        'xp_gained_per_min_20_to_30': [],
+        'xp_gained_per_min_30_to_40': [],
+        'cc_score_applied_pre_mitigation': [],
+        'cc_score_applied_post_mitigation': [],
+        'scored_first_blood_kill': [],
+        'scored_first_blood_assist': [],
+        'scored_first_tower_kill': [],
+        'scored_first_tower_assist': [],
+        'scored_first_inhibitor_kill': [],
+        'scored_first_inhibitor_assist': [],
+        'damage_taken_diff_per_min_0_to_10': [],
+        'damage_taken_diff_per_min_10_to_20': [],
+        'damage_taken_diff_per_min_20_to_30': [],
+        'damage_taken_diff_per_min_30_to_40': [],
+        'minions_killed_diff_per_min_0_to_10': [],
+        'minions_killed_diff_per_min_10_to_20': [],
+        'minions_killed_diff_per_min_20_to_30': [],
+        'minions_killed_diff_per_min_30_to_40': [],
+        'xp_gained_diff_per_min_0_to_10': [],
+        'xp_gained_diff_per_min_10_to_20': [],
+        'xp_gained_diff_per_min_20_to_30': [],
+        'xp_gained_diff_per_min_30_to_40': [],
+        'champion_level': []
+    }
 
     # Normalize lane name from match_result_json to same as here match references
     week_in_ms = 7*24*60*60*1000
@@ -378,7 +551,7 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                 num_games += 1
                 if m_ref['champion'] == champion_id:
                     num_games_on_the_champion += 1
-                    if len(gamedatas_on_the_champion_on_the_lane) < max_games_lookback:
+                    if len(fighting_on_the_champion_as_the_lane) < max_games_lookback:
                         try:
                             m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
                             if m_obj.match_result_json is not None:
@@ -443,11 +616,14 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
                             summonerspells_on_the_champion.append(historical_summonerspells)
 
                         # Parse data
-                        historical_record = parse_stats_one_game(result_dict,
-                                                                 timeline_dict,
-                                                                 items_dictionaries[historical_game_version.semver],
-                                                                 p_data['participantId'])
-                        gamedatas_on_the_champion_on_the_lane.append(historical_record)
+                        participated_fights = parse_fights_one_game(result_dict,
+                                                                    timeline_dict,
+                                                                    items_dictionaries[historical_game_version.semver],
+                                                                    p_data['participantId'])
+                        fighting_on_the_champion_as_the_lane.append(participated_fights)
+                        postgame_stats = parse_postgame_stats(p_data)
+                        for statname, statvalue in postgame_stats.items():
+                            postgame_stats_on_the_champion_as_the_lane[statname].append(statvalue)
         except RiotApiError as err:
             if err.response.status_code == 429:
                 raise RiotApiError(err.response) from None
@@ -461,8 +637,10 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
         'is_rusty': num_games_on_the_champion == 0,
         'is_inactive': num_games == 0,
         'is_unusual_summonerspells': summonerspells_set not in summonerspells_on_the_champion if num_games_on_the_champion > 0 else False,
-        'fight_participation': gamedatas_on_the_champion_on_the_lane
+        'fight_participation': fighting_on_the_champion_as_the_lane
     }
+    for statname, stat_aggregate in postgame_stats_on_the_champion_as_the_lane.items():
+        history[statname] = sum(stat_aggregate) / len(stat_aggregate)
     return history
 
 
