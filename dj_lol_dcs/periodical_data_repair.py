@@ -640,7 +640,7 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
         'fight_participation': fighting_on_the_champion_as_the_lane
     }
     for statname, stat_aggregate in postgame_stats_on_the_champion_as_the_lane.items():
-        history[statname] = sum(stat_aggregate) / len(stat_aggregate)
+        history[statname] = sum(stat_aggregate) / len(stat_aggregate) if len(stat_aggregate) > 0 else 0
     return history
 
 
