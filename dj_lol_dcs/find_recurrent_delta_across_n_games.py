@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 import os
 import sys
-import requests
 import json
-import time
 import itertools
 import argparse
 
 import lolapi.app_lib.riotapi_endpoints as riotapi_endpoints
-import lolapi.app_lib.datadragon_endpoints as d_endpoints
 from lolapi.app_lib.regional_riotapi_hosts import RegionalRiotapiHosts
 from lolapi.app_lib.riot_api import RiotApi
 from lolapi.app_lib.api_key_container import ApiKeyContainer, MethodRateLimits
@@ -17,100 +14,13 @@ from lolapi.app_lib.exceptions import RiotApiError, ConfigurationError, Ratelimi
 import django
 os.environ['DJANGO_SETTINGS_MODULE'] = 'dj_lol_dcs.settings'
 django.setup()
-from lolapi.models import GameVersion, Champion, ChampionGameData, StaticGameData
-from lolapi.models import Region, Summoner, SummonerTierHistory
 from lolapi.models import HistoricalMatch
 from lolapi.app_lib.mysql_requesthistory_checking import MysqlRequestHistory
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.db.models import Q
-
-
-def request_and_link_timeline_to_match(match, riotapi, platform_id, retries=0):
-    """
-        If loading timeline fails:
-        - IF HTTP STATUS CODE 429 [ = rate-limiting ] and not Service-429 => something wrong with rate-limiting so exit
-        - else retry up to N times
-        - if still no, exit gracefully (leaving partial match data that can be filled later)
-    """
-    error_retries_done = 0
-    tries_permitted = 1 + retries
-    while error_retries_done < tries_permitted:
-        try:
-            timeline_dict = riotapi.get_match_timeline(platform_id, match.match_id).json()
-            match.match_timeline_json = json.dumps(timeline_dict)
-            break
-        except RiotApiError as err:
-            if err.response.status_code == 429:
-                # if service rate limit from underlying service with unknown rate limit mechanism, wait 5s
-                # https://developer.riotgames.com/rate-limiting.html
-                if 'X-Rate-Limit-Type' not in err.response.headers:
-                    time.sleep(5)
-                    continue  # Try again (without counting this as a retry because it is the service being crowded)
-                # if a service rate limit error, wait the time returned in header, and retry without counting it
-                if err.response.headers['X-Rate-Limit-Type'] == 'service':
-                    time.sleep(int(err.response.headers['Retry-After']))
-                    continue  # Try again (without counting this as a retry because it is the service being crowded)
-                # else it is application or method rate limit error, something badly wrong in our rate limiting
-                else:
-                    print("Really bad. Received {} rate limit error".format(err.response.headers['X-Rate-Limit-Type']))
-                    raise RiotApiError(err.response) from None
-            else:
-                print("Failed to load timeline for match {} (HTTP Error {}) - retry in 1,2,..".format(
-                    match.match_id,
-                    err.response.status_code))
-                # One, two
-                time.sleep(2)
-                error_retries_done += 1
-    if error_retries_done == tries_permitted:
-        print("Retried maximum of {} times - Riot API still returning errors so skipping this timeline for now".format(
-            retries
-        ))
-
-
-def get_or_create_region(region_name):
-    try:
-        matching_region = Region.objects.get(name=region_name)
-    except ObjectDoesNotExist:
-        try:
-            matching_region = Region(name=region_name)
-            matching_region.save()
-        except IntegrityError:
-            # If region was created by another process, fetch that one
-            matching_region = Region.objects.get(name=region_name)
-    return matching_region
-
-
-def get_or_create_game_version(match_result):
-    known_game_versions = list(GameVersion.objects.all())
-    # Parse match's version (major.minor , split-by-. [:2] join-by-.)
-    match_version_id = '.'.join(match_result['gameVersion'].split('.')[0:2])
-
-    # Confirm match's version exists in known versions - get first (earliest) match
-    matching_known_version = next(
-        filter(lambda ver: '.'.join(ver.semver.split('.')[0:2]) == match_version_id, known_game_versions),
-        None
-    )
-
-    # If match's version didn't exist amongst known versions - update them, and refresh known_game_versions
-    if not matching_known_version:
-        updated_game_versions = requests.get(d_endpoints.VERSIONS).json()
-        known_game_version_ids = list(map(lambda gv: gv.semver, known_game_versions))
-        new_game_version_ids = [ver for ver in updated_game_versions if ver not in known_game_version_ids]
-        for version_id in new_game_version_ids:
-            print("Saving new game version {}".format(version_id))
-            try:
-                new_ver = GameVersion(semver=version_id)
-                new_ver.save()
-            except IntegrityError:
-                # If another process created the version, keep going
-                pass
-        matching_known_version = next(
-            filter(lambda gv: '.'.join(gv.semver.split('.')[0:2]) == match_version_id,
-                   known_game_versions),
-            None
-        )
-    return matching_known_version
+from lolapi.app_lib.utils import get_or_create_game_version, get_or_create_region, get_existing_summoner_or_none
+from lolapi.app_lib.utils import request_and_link_timeline_to_match, request_and_return_ongoing_match_or_none
 
 
 def main(args):
