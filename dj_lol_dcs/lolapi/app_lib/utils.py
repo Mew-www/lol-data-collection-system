@@ -921,7 +921,8 @@ def get_stats_availability(account_id, champion_id, reallane, summonerspells_set
                     continue
 
                 # Check if lane is current one
-                lane_then = create_champion_lane_mapping(result_dict, timeline_dict)[champion_id]
+                champion_then = m_ref['champion']
+                lane_then = create_champion_lane_mapping(result_dict, timeline_dict)[champion_then]
                 if lane_then != reallane:
                     num_matches_in_role += 1
 
