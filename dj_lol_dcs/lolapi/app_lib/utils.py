@@ -842,3 +842,113 @@ def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
     for statname, stat_aggregate in postgame_stats_on_the_champion_as_the_lane.items():
         history[statname] = sum(stat_aggregate) / len(stat_aggregate) if len(stat_aggregate) > 0 else 0
     return history
+
+
+def get_stats_availability(account_id, champion_id, reallane, summonerspells_set, runes_set,
+                           match_time, riotapi, region,
+                           max_weeks_lookback, max_games_lookback):
+    """
+    player (i.e. no categorization, all historical matches)
+    player in a specific role
+    player as a specific character
+    player using specific set of summonerspells
+    player using specific set of runes
+    player using specific set of items
+    or any mixture of these
+    """
+    num_matches = 0
+    num_matches_in_role = 0
+    num_matches_as_champion = 0
+    num_matches_with_summonerspells = 0
+    num_matches_with_runes = 0
+
+    week_in_ms = 7*24*60*60*1000
+    for week_i in range(max_weeks_lookback):
+        end_time = match_time - 1000 - (week_i * week_in_ms)  # Offset by 1s
+        start_time = end_time - week_in_ms
+        try:
+            # Returns a maximum of 100 matches
+            week_matchlist = riotapi.get_matchlist(region.name,
+                                                   account_id,
+                                                   end_time=end_time,
+                                                   begin_time=start_time)
+            for m_ref in week_matchlist.json()['matches']:
+                num_matches += 1
+                if m_ref['champion'] == champion_id:
+                    num_matches_as_champion += 1
+                # Request the match to know more (i.e. real-lane etc.)
+                try:
+                    m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
+                    if m_obj.match_result_json is not None:
+                        result_dict = json.loads(m_obj.match_result_json)
+                    else:
+                        result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                        m_obj.game_version = get_or_create_game_version(result_dict)
+                        m_obj.game_duration = result_dict['gameDuration']
+                        m_obj.match_result_json = json.dumps(result_dict)
+                        m_obj.save()
+                    if m_obj.match_timeline_json is not None:
+                        timeline_dict = json.loads(m_obj.match_timeline_json)
+                    else:
+                        timeline_dict = request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
+                        m_obj.save()
+                except ObjectDoesNotExist:
+                    try:
+                        m_obj = HistoricalMatch(
+                            match_id=m_ref['gameId'],
+                            region=region
+                        )
+                        result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                        m_obj.game_version = get_or_create_game_version(result_dict)
+                        m_obj.game_duration = result_dict['gameDuration']
+                        m_obj.match_result_json = json.dumps(result_dict)
+                        timeline_dict = request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
+                        m_obj.save()
+                    except IntegrityError:
+                        # If match was created by another process, fetch it
+                        m_obj = HistoricalMatch.objects.get(match_id=m_ref['gameId'], region=region)
+                        if m_obj.match_result_json is not None:
+                            result_dict = json.loads(m_obj.match_result_json)
+                        else:
+                            result_dict = riotapi.get_match_result(m_ref['platformId'], m_ref['gameId']).json()
+                        if m_obj.match_timeline_json is not None:
+                            timeline_dict = json.loads(m_obj.match_timeline_json)
+                        else:
+                            timeline_dict = request_and_link_timeline_to_match(m_obj, riotapi, m_ref['platformId'], retries=2)
+
+                # Check if it is remake, don't count those
+                if result_dict['gameDuration'] < 300:
+                    continue
+
+                # Check if lane is current one
+                lane_then = create_champion_lane_mapping(result_dict, timeline_dict)[champion_id]
+                if lane_then != reallane:
+                    num_matches_in_role += 1
+
+                # Historically account ID may be different and UN-OBTAINABLE (pls riot) so we'll rely on champ
+                p_data = next(filter(lambda p: p['championId'] == champion_id, result_dict['participants']))
+
+                # Check if summoner-spells are current ones
+                historical_summonerspells = {p_data['spell1Id'], p_data['spell2Id']}
+                if historical_summonerspells == summonerspells_set:
+                    num_matches_with_summonerspells += 1
+
+                # Check if runes are current ones
+                if {p_data['stats']['perk0'], p_data['stats']['perk1'], p_data['stats']['perk2'],
+                    p_data['stats']['perk3'], p_data['stats']['perk4'], p_data['stats']['perk5']} == runes_set:
+                    num_matches_with_runes += 1
+        except RiotApiError as err:
+            if err.response.status_code == 429:
+                raise RiotApiError(err.response) from None
+            elif err.response.status_code == 404:
+                continue  # No matches found {week_i} weeks in past, keep checking since the timeframe is explicit
+            else:
+                print('Unexpected HTTP {} error when querying match history ({})'.format(err.response.status_code,
+                                                                                         err.response.url.split('?')[0]))
+    return {
+        'num_matches': num_matches,
+        'num_matches_in_role': num_matches_in_role,
+        'num_matches_as_champion': num_matches_as_champion,
+        'num_matches_with_summonerspells': num_matches_with_summonerspells,
+        'num_matches_with_runes': num_matches_with_runes
+    }
