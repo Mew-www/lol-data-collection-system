@@ -927,7 +927,7 @@ def get_stats_availability(account_id, champion_id, reallane, summonerspells_set
                     num_matches_in_role += 1
 
                 # Historically account ID may be different and UN-OBTAINABLE (pls riot) so we'll rely on champ
-                p_data = next(filter(lambda p: p['championId'] == champion_id, result_dict['participants']))
+                p_data = next(filter(lambda p: p['championId'] == champion_then, result_dict['participants']))
 
                 # Check if summoner-spells are current ones
                 historical_summonerspells = {p_data['spell1Id'], p_data['spell2Id']}
