@@ -727,7 +727,7 @@ def parse_participant_postgame_stats(participant_data, extraction_rules):
     return participant_postgame_stats
 
 
-def get_stats_history(account_id, champion_id, reallane, summonerspells_set,
+def get_stats_history(account_id, reallane,
                       match_time, riotapi, region, items_dictionaries,
                       max_weeks_lookback, max_games_lookback):
     """

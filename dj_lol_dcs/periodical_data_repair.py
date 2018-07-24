@@ -440,7 +440,6 @@ def main(args):
                             p_id = p_identity['participantId']
                             p_data = next(filter(lambda p_d: p_d['participantId'] == p_id, m_result['participants']))
                             p_history = get_stats_history(p_identity['player']['currentAccountId'],
-                                                          p_data['championId'],
                                                           create_champion_lane_mapping(m_result, m_timeline)[p_data['championId']],
                                                           m_result['gameCreation'],
                                                           riotapi,
