@@ -439,16 +439,14 @@ def main(args):
                         for p_identity in m_result['participantIdentities']:
                             p_id = p_identity['participantId']
                             p_data = next(filter(lambda p_d: p_d['participantId'] == p_id, m_result['participants']))
-                            p_history = get_stats_availability(p_identity['player']['currentAccountId'],
-                                                               p_data['championId'],
-                                                               create_champion_lane_mapping(m_result, m_timeline)[p_data['championId']],
-                                                               {p_data['spell1Id'], p_data['spell2Id']},
-                                                               {p_data['stats']['perk0'], p_data['stats']['perk1'],
-                                                                p_data['stats']['perk2'], p_data['stats']['perk3'],
-                                                                p_data['stats']['perk4'], p_data['stats']['perk5']},
-                                                               m_result['gameCreation'],
-                                                               riotapi, match_object.region,
-                                                               max_weeks_lookback=3, max_games_lookback=50)
+                            p_history = get_stats_history(p_identity['player']['currentAccountId'],
+                                                          p_data['championId'],
+                                                          create_champion_lane_mapping(m_result, m_timeline)[p_data['championId']],
+                                                          m_result['gameCreation'],
+                                                          riotapi,
+                                                          match_object.region,
+                                                          items_dictionaries,
+                                                          max_weeks_lookback=3, max_games_lookback=50)
                             stats_histories[p_data['championId']] = p_history
                         match_object.match_participants_histories_json = json.dumps(stats_histories)
                     except ObjectDoesNotExist:
