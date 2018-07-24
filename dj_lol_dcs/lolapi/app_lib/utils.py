@@ -931,7 +931,7 @@ def get_stats_history(account_id, reallane,
                             postgame_stats_in_current_lane[statname].append(statvalue)
 
                     # Draw conclusions based on win/loss
-                    victory = p_data['stats']['won']
+                    victory = p_data['stats']['win']
                     if previous_game_won == 0:
                         previous_game_won = 1 if victory else -1
                     if winning is None:
