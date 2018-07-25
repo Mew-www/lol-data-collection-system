@@ -628,13 +628,19 @@ def parse_fights_one_game(result, timeline, items_dictionary, participant_id):
 
 
 def calc_participant_aggressiveness_and_judgment(past_games):
+    # Initialize with None to mark missing values...
     aggressiveness_and_judgment = {
-        'solo': {'ratio': 0, 'aggro': 0},
-        'skirmish': {'ratio': 0, 'aggro': 0},
-        'team': {'ratio': 0, 'aggro': 0}
+        'solo': {'ratio': None, 'aggro': None},
+        'skirmish': {'ratio': None, 'aggro': None},
+        'team': {'ratio': None, 'aggro': None}
     }
+    # ...and return them if no game records to derive values from.
     if len(past_games) == 0:
         return aggressiveness_and_judgment
+    # Initialize separately a scenario where "there are games but no events" (as opposed to no games).
+    for fight_type in ['solo', 'skirmish', 'team']:
+        aggressiveness_and_judgment[fight_type]['ratio'] = 0
+        aggressiveness_and_judgment[fight_type]['aggro'] = 0
     solo = {
         'win': {
             'x': [],
