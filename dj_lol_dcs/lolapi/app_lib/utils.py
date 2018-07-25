@@ -628,8 +628,13 @@ def parse_fights_one_game(result, timeline, items_dictionary, participant_id):
 
 
 def calc_participant_aggressiveness_and_judgment(past_games):
+    aggressiveness_and_judgment = {
+        'solo': {'ratio': 0, 'aggro': 0},
+        'skirmish': {'ratio': 0, 'aggro': 0},
+        'team': {'ratio': 0, 'aggro': 0}
+    }
     if len(past_games) == 0:
-        return 0, 0
+        return aggressiveness_and_judgment
     solo = {
         'win': {
             'x': [],
@@ -705,11 +710,6 @@ def calc_participant_aggressiveness_and_judgment(past_games):
                 else:
                     team['loss']['x'].append(e['timestamp']/1000)
                     team['loss']['y'].append(e['effective_gold'])
-    aggressiveness_and_judgment = {
-        'solo': {'ratio': 0, 'aggro': 0},
-        'skirmish': {'ratio': 0, 'aggro': 0},
-        'team': {'ratio': 0, 'aggro': 0}
-    }
     for fight_type, fight_data in [('solo', solo), ('skirmish', skirmish), ('team', team)]:
         aggressiveness_and_judgment[fight_type]['ratio'] = (
             (len(fight_data['win']['x'])-len(fight_data['loss']['x']))/len(past_games)
